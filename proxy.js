@@ -11,7 +11,7 @@ function isCronRequest(req) {
   return req.headers.get('authorization') === `Bearer ${secret}`;
 }
 
-export function middleware(req) {
+export function proxy(req) {
   const { pathname } = req.nextUrl;
 
   if (
