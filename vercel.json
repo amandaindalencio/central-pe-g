@@ -1,6 +1,6 @@
 {
   "crons": [
-    { "path": "/api/sync/downsell", "schedule": "0 */12 * * *" },
+    { "path": "/api/sync/downsell", "schedule": "0 6 * * *" },
     { "path": "/api/sync/renovacao", "schedule": "0 3 * * *" }
   ]
 }
