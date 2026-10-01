@@ -83,6 +83,28 @@ window.fetch = async (url, opts) => {
   }, 400);
 })();
 
+// ---- Scenario 2c: /api/data/churn pre-populated — RAW.churnByMonth gets overwritten ----
+(function scenarioChurnPreseeded(){
+  const fetchImpl = `
+window.fetch = async (url, opts) => {
+  if (url === '/api/data/churn') {
+    return { ok:true, json: async () => ({
+      data: { payload: { '2026-01': [{name:'CLIENTE CHURN FAKE', documentId:'fakedoc1', lt:12, coord:'jefferson.vieira', squad:'Invictus', motivo:'Financeiro', churnDetail:'Não informado', valor:5000, data:'15/01'}] } },
+      status: { status:'ok', updatedAt: Date.now()-5400000, error:null }
+    }) };
+  }
+  return { ok:true, json: async () => ({ data:null, status:null }) };
+};`;
+  const dom = loadDom(fetchImpl);
+  const doc = dom.window.document;
+  setTimeout(()=>{
+    assert(dom.window.__errors.length===0, '[churn-preseeded] no JS errors on load');
+    const pill = doc.getElementById('sync-pill-churn');
+    assert(pill.classList.contains('ok'), '[churn-preseeded] churn pill shows ok status from /api/data');
+    assert(doc.getElementById('churn-table').innerHTML.includes('CLIENTE CHURN FAKE'), '[churn-preseeded] churn table re-renders with the synced data');
+  }, 400);
+})();
+
 // ---- Scenario 3: POST /api/sync/downsell fails (e.g. Cockpit token invalid) ----
 (function scenarioSyncError(){
   const fetchImpl = `

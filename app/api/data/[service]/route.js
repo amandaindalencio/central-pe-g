@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDoc } from '@/lib/store';
 
-const KNOWN_SERVICES = ['downsell', 'renovacao', 'npscsat'];
+const KNOWN_SERVICES = ['downsell', 'renovacao', 'npscsat', 'churn'];
 
 export async function GET(req, { params }) {
   const { service } = await params;
