@@ -14,12 +14,11 @@ import {
 // allows on Hobby.
 export const maxDuration = 60;
 
-// IMPORTANT: Vercel's Fluid Compute was routing this function to iad1
-// (Washington, D.C.) on some invocations — confirmed via function logs on a
-// Help Flag timeout (61.5s, every one of ~9 parallel Cockpit calls paying a
-// Brazil<->US round trip). Pinning to gru1 (São Paulo) keeps it next to the
-// Cockpit MCP gateway (hosted in Brazil) instead of wherever Fluid picks.
-export const preferredRegion = 'gru1';
+// Tried pinning preferredRegion='gru1' (São Paulo) after a function log
+// showed one Help Flag timeout running in iad1 (Washington, D.C.) — made
+// things WORSE (previously-working Churn/NPS&CSAT started 504ing too), so
+// reverted. gru1 may not be reliably available on this Vercel plan/Fluid
+// Compute setup; not touching region again without clearer evidence.
 
 const SERVICES = {
   downsell: { fetch: fetchDownsells, transform: transformDownsell, label: 'Downsell' },

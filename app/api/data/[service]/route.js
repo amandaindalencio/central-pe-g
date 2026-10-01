@@ -1,10 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDoc } from '@/lib/store';
 
-// Keep every function next to the Redis store + the people using the
-// dashboard (same reasoning as app/api/sync/[service]/route.js).
-export const preferredRegion = 'gru1';
-
 const KNOWN_SERVICES = ['downsell', 'renovacao', 'npscsat', 'churn', 'previsao', 'helpflag'];
 
 export async function GET(req, { params }) {
