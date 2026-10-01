@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server';
 import { setDoc } from '@/lib/store';
-import { fetchDownsells, fetchRenovacoes, fetchNpsCsatHistory, fetchChurnedProjects, fetchPrevisaoData } from '@/lib/cockpit';
-import { transformDownsell, transformRenovacao, transformNpsCsat, transformChurn, transformPrevisao } from '@/lib/transforms';
+import {
+  fetchDownsells, fetchRenovacoes, fetchNpsCsatHistory, fetchChurnedProjects,
+  fetchPrevisaoData, fetchHelpFlagHistory,
+} from '@/lib/cockpit';
+import {
+  transformDownsell, transformRenovacao, transformNpsCsat, transformChurn,
+  transformPrevisao, transformHelpFlag,
+} from '@/lib/transforms';
 
-// NPS/CSAT fetches ~18 pages of history in parallel (8.8k rows) — needs more
-// than the default timeout. 60s is the max Vercel allows on the Hobby plan.
+// NPS/CSAT and Help Flag fetch ~18-29 pages of history in parallel — needs
+// more than the default timeout. 60s is the max Vercel allows on Hobby.
 export const maxDuration = 60;
 
 const SERVICES = {
@@ -13,6 +19,7 @@ const SERVICES = {
   npscsat: { fetch: fetchNpsCsatHistory, transform: transformNpsCsat, label: 'NPS & CSAT' },
   churn: { fetch: fetchChurnedProjects, transform: transformChurn, label: 'Revenue Churn' },
   previsao: { fetch: fetchPrevisaoData, transform: transformPrevisao, label: 'Previsão' },
+  helpflag: { fetch: fetchHelpFlagHistory, transform: transformHelpFlag, label: 'Help Flag' },
 };
 
 async function runService(service) {

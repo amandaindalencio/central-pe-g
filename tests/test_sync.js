@@ -134,6 +134,28 @@ window.fetch = async (url, opts) => {
   }, 400);
 })();
 
+// ---- Scenario 2e: /api/data/helpflag pre-populated — RAW.helpFlagByMonth gets overwritten ----
+(function scenarioHelpFlagPreseeded(){
+  const fetchImpl = `
+window.fetch = async (url, opts) => {
+  if (url === '/api/data/helpflag') {
+    return { ok:true, json: async () => ({
+      data: { payload: { '2026-01': [{name:'CLIENTE HELPFLAG FAKE', squad:'Invictus', coord:'jefferson.vieira', am:'Maria', hs:15}] } },
+      status: { status:'ok', updatedAt: Date.now()-1800000, error:null }
+    }) };
+  }
+  return { ok:true, json: async () => ({ data:null, status:null }) };
+};`;
+  const dom = loadDom(fetchImpl);
+  const doc = dom.window.document;
+  setTimeout(()=>{
+    assert(dom.window.__errors.length===0, '[helpflag-preseeded] no JS errors on load');
+    const pill = doc.getElementById('sync-pill-helpflag');
+    assert(pill.classList.contains('ok'), '[helpflag-preseeded] helpflag pill shows ok status from /api/data');
+    assert(doc.getElementById('hf-table').innerHTML.includes('CLIENTE HELPFLAG FAKE'), '[helpflag-preseeded] hf-table re-renders with the synced data');
+  }, 400);
+})();
+
 // ---- Scenario 3: POST /api/sync/downsell fails (e.g. Cockpit token invalid) ----
 (function scenarioSyncError(){
   const fetchImpl = `

@@ -199,6 +199,7 @@ code{background:var(--surface-alt);border:1px solid var(--border);padding:1px 5p
   <span class="sync-pill idle" id="sync-pill-npscsat" data-service="npscsat"><span class="sync-dot"></span>NPS &amp; CSAT <span class="sync-meta">—</span></span>
   <span class="sync-pill idle" id="sync-pill-churn" data-service="churn"><span class="sync-dot"></span>Revenue Churn <span class="sync-meta">—</span></span>
   <span class="sync-pill idle" id="sync-pill-previsao" data-service="previsao"><span class="sync-dot"></span>Previsão <span class="sync-meta">—</span></span>
+  <span class="sync-pill idle" id="sync-pill-helpflag" data-service="helpflag"><span class="sync-dot"></span>Help Flag <span class="sync-meta">—</span></span>
   <button class="sync-all-btn" id="sync-all-btn">Sincronizar tudo</button>
   <div id="sync-error-box"></div>
 </div>
@@ -1048,7 +1049,8 @@ function renderHelpFlagSection(){
 }
 function buildHfEvoChart(){
   const vals = MONTHS.map(m=>hfStats(helpFlagRows(m, 'all')).pct);
-  new Chart(document.getElementById('chartHfEvo'), {
+  if(window._hfEvoChart) window._hfEvoChart.destroy();
+  window._hfEvoChart = new Chart(document.getElementById('chartHfEvo'), {
     type:'line',
     data:{labels:MONTHS.map(m=>MONTH_SHORT[m]),datasets:[{label:'% HS≤21',data:vals,borderColor:'#DC2626',backgroundColor:'#DC262633',borderWidth:2,pointRadius:3,tension:.3,fill:true,spanGaps:true}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+ctx.raw.toFixed(1)+'%'}}},
@@ -1793,6 +1795,15 @@ const SYNC_SERVICES = [
       document.getElementById('previsao-month-select').innerHTML = previsaoMonthOptionsHTML();
       renderPrevisao(churnSquadSel);
       buildRecoveryTable(churnSquadSel);
+    },
+  },
+  {
+    id: 'helpflag', label: 'Help Flag', staleAfterMs: 24*3600*1000,
+    onData: (data) => {
+      RAW.helpFlagByMonth = data;
+      renderHelpFlagSection();
+      buildHfGovernanceGrid();
+      buildHfEvoChart();
     },
   },
 ];

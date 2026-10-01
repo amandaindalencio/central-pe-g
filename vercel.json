@@ -4,6 +4,7 @@
     { "path": "/api/sync/renovacao", "schedule": "0 3 * * *" },
     { "path": "/api/sync/npscsat", "schedule": "0 4 * * *" },
     { "path": "/api/sync/churn", "schedule": "0 5 * * *" },
-    { "path": "/api/sync/previsao", "schedule": "30 5 * * *" }
+    { "path": "/api/sync/previsao", "schedule": "30 5 * * *" },
+    { "path": "/api/sync/helpflag", "schedule": "0 7 * * *" }
   ]
 }
