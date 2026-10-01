@@ -196,6 +196,7 @@ code{background:var(--surface-alt);border:1px solid var(--border);padding:1px 5p
   <span class="sync-label">Sincronização</span>
   <span class="sync-pill idle" id="sync-pill-downsell" data-service="downsell"><span class="sync-dot"></span>Downsell <span class="sync-meta">—</span></span>
   <span class="sync-pill idle" id="sync-pill-renovacao" data-service="renovacao"><span class="sync-dot"></span>Renovação <span class="sync-meta">—</span></span>
+  <span class="sync-pill idle" id="sync-pill-npscsat" data-service="npscsat"><span class="sync-dot"></span>NPS &amp; CSAT <span class="sync-meta">—</span></span>
   <button class="sync-all-btn" id="sync-all-btn">Sincronizar tudo</button>
   <div id="sync-error-box"></div>
 </div>
@@ -1752,6 +1753,8 @@ function buildRenovacaoSection(){
    verdade agora roda no backend, não mais via capability mcp/db do Artifact)
    ============================================================ */
 const SYNCED_DATA = {}; // {downsell: byMonth, renovacao: items[]} — preenchido via /api/data, fallback é o RAW estático
+// npscsat não usa SYNCED_DATA — ele sobrescreve RAW.npsCsatRaw direto (ver SYNC_SERVICES abaixo),
+// já que o motor de NPS/CSAT (npscx*) lê RAW.npsCsatRaw diretamente em vários lugares.
 
 const SYNC_SERVICES = [
   {
@@ -1761,6 +1764,18 @@ const SYNC_SERVICES = [
   {
     id: 'renovacao', label: 'Renovação', staleAfterMs: 24*3600*1000,
     onData: (data) => { SYNCED_DATA.renovacao = data; document.getElementById('renovacao-month-select').innerHTML = renovacaoMonthOptionsHTML(); buildRenovacaoSection(); },
+  },
+  {
+    id: 'npscsat', label: 'NPS & CSAT', staleAfterMs: 24*3600*1000,
+    onData: (data) => {
+      RAW.npsCsatRaw = data;
+      // limpa os caches memoizados do motor de NPS/CSAT — sem isso eles
+      // continuariam servindo o RAW estático calculado no primeiro load
+      window._npscxProjById = null;
+      window._npscxClean = null;
+      window._npscxMonthly = null;
+      renderNpsCsatSection();
+    },
   },
 ];
 

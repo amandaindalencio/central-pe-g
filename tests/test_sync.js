@@ -57,6 +57,32 @@ window.fetch = async (url, opts) => {
   }, 400);
 })();
 
+// ---- Scenario 2b: /api/data/npscsat pre-populated — RAW.npsCsatRaw gets overwritten ----
+(function scenarioNpsCsatPreseeded(){
+  const fetchImpl = `
+window.fetch = async (url, opts) => {
+  if (url === '/api/data/npscsat') {
+    return { ok:true, json: async () => ({
+      data: { payload: {
+        projects: [{ id:'fakeproj1', name:'CLIENTE NPSCSAT FAKE', squad:'Invictus', coordinator:'jefferson.vieira', status:'active' }],
+        responses: [{ project_id:'fakeproj1', csat_date:'2026-06-10', nps:10, v4:5, service:5, campaigns:5, copy:5, design:5, deadlines:5, results:5, comment:null }]
+      } },
+      status: { status:'ok', updatedAt: Date.now()-7200000, error:null }
+    }) };
+  }
+  return { ok:true, json: async () => ({ data:null, status:null }) };
+};`;
+  const dom = loadDom(fetchImpl);
+  const doc = dom.window.document;
+  setTimeout(()=>{
+    assert(dom.window.__errors.length===0, '[npscsat-preseeded] no JS errors on load');
+    const pill = doc.getElementById('sync-pill-npscsat');
+    assert(pill.classList.contains('ok'), '[npscsat-preseeded] npscsat pill shows ok status from /api/data');
+    assert(dom.window.npscxActiveProjects().some(p=>p.id==='fakeproj1'), '[npscsat-preseeded] RAW.npsCsatRaw got overwritten with the synced data (visible via npscxActiveProjects)');
+    assert(dom.window.npscxCleanResponses().some(r=>r.project_id==='fakeproj1'), '[npscsat-preseeded] npscxCleanResponses() picks up the new data (memoization cache was cleared)');
+  }, 400);
+})();
+
 // ---- Scenario 3: POST /api/sync/downsell fails (e.g. Cockpit token invalid) ----
 (function scenarioSyncError(){
   const fetchImpl = `
