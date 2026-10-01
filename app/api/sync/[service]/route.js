@@ -9,9 +9,17 @@ import {
   transformPrevisao, transformHelpFlag,
 } from '@/lib/transforms';
 
-// NPS/CSAT and Help Flag fetch ~18-29 pages of history in parallel — needs
-// more than the default timeout. 60s is the max Vercel allows on Hobby.
+// NPS/CSAT and Help Flag fetch ~9-18 calls to the Cockpit MCP gateway in
+// parallel — needs more than the default timeout. 60s is the max Vercel
+// allows on Hobby.
 export const maxDuration = 60;
+
+// IMPORTANT: Vercel's Fluid Compute was routing this function to iad1
+// (Washington, D.C.) on some invocations — confirmed via function logs on a
+// Help Flag timeout (61.5s, every one of ~9 parallel Cockpit calls paying a
+// Brazil<->US round trip). Pinning to gru1 (São Paulo) keeps it next to the
+// Cockpit MCP gateway (hosted in Brazil) instead of wherever Fluid picks.
+export const preferredRegion = 'gru1';
 
 const SERVICES = {
   downsell: { fetch: fetchDownsells, transform: transformDownsell, label: 'Downsell' },
