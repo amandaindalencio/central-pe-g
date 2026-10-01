@@ -198,6 +198,7 @@ code{background:var(--surface-alt);border:1px solid var(--border);padding:1px 5p
   <span class="sync-pill idle" id="sync-pill-renovacao" data-service="renovacao"><span class="sync-dot"></span>Renovação <span class="sync-meta">—</span></span>
   <span class="sync-pill idle" id="sync-pill-npscsat" data-service="npscsat"><span class="sync-dot"></span>NPS &amp; CSAT <span class="sync-meta">—</span></span>
   <span class="sync-pill idle" id="sync-pill-churn" data-service="churn"><span class="sync-dot"></span>Revenue Churn <span class="sync-meta">—</span></span>
+  <span class="sync-pill idle" id="sync-pill-previsao" data-service="previsao"><span class="sync-dot"></span>Previsão <span class="sync-meta">—</span></span>
   <button class="sync-all-btn" id="sync-all-btn">Sincronizar tudo</button>
   <div id="sync-error-box"></div>
 </div>
@@ -1781,6 +1782,18 @@ const SYNC_SERVICES = [
   {
     id: 'churn', label: 'Revenue Churn', staleAfterMs: 24*3600*1000,
     onData: (data) => { RAW.churnByMonth = data; renderChurnSection(); },
+  },
+  {
+    id: 'previsao', label: 'Previsão', staleAfterMs: 24*3600*1000,
+    onData: (data) => {
+      RAW.forecastItems = data.forecastItems;
+      RAW.forecastIncomplete = data.forecastIncomplete;
+      RAW.previsaoRiskPool = data.previsaoRiskPool;
+      RAW.recoveryItems = data.recoveryItems;
+      document.getElementById('previsao-month-select').innerHTML = previsaoMonthOptionsHTML();
+      renderPrevisao(churnSquadSel);
+      buildRecoveryTable(churnSquadSel);
+    },
   },
 ];
 

@@ -105,6 +105,35 @@ window.fetch = async (url, opts) => {
   }, 400);
 })();
 
+// ---- Scenario 2d: /api/data/previsao pre-populated — RAW.forecastItems etc. get overwritten ----
+(function scenarioPrevisaoPreseeded(){
+  const fetchImpl = `
+window.fetch = async (url, opts) => {
+  if (url === '/api/data/previsao') {
+    return { ok:true, json: async () => ({
+      data: { payload: {
+        forecastItems: [{name:'CLIENTE PREVISAO FAKE', squad:'Invictus', coord:'jefferson.vieira', am:'Maria', requestDate:'01/09/2026', noticeDays:30, projectedDate:'01/10/2026', projectedMonth:'2026-10', overdue:false, fee:9000}],
+        forecastIncomplete: [],
+        previsaoRiskPool: [{name:'CLIENTE RISCO FAKE', squad:'Billions', coord:'nayaraventura', am:'mychelly', healthMedio:45, flag:'Care', fee:3000}],
+        recoveryItems: [{name:'CLIENTE PREVISAO FAKE', squad:'Invictus', coord:'jefferson.vieira', am:'Maria', requestDate:'01/09/2026', projectedDate:'01/10/2026', avisoVencido:false}]
+      } },
+      status: { status:'ok', updatedAt: Date.now()-3600000, error:null }
+    }) };
+  }
+  return { ok:true, json: async () => ({ data:null, status:null }) };
+};`;
+  const dom = loadDom(fetchImpl);
+  const doc = dom.window.document;
+  setTimeout(()=>{
+    assert(dom.window.__errors.length===0, '[previsao-preseeded] no JS errors on load');
+    const pill = doc.getElementById('sync-pill-previsao');
+    assert(pill.classList.contains('ok'), '[previsao-preseeded] previsao pill shows ok status from /api/data');
+    assert(doc.getElementById('previsao-table').innerHTML.includes('CLIENTE PREVISAO FAKE'), '[previsao-preseeded] previsao table re-renders with the synced data');
+    assert(doc.getElementById('previsao-risk-table').innerHTML.includes('CLIENTE RISCO FAKE'), '[previsao-preseeded] risk pool table re-renders with the synced data');
+    assert(doc.getElementById('recovery-table').innerHTML.includes('CLIENTE PREVISAO FAKE'), '[previsao-preseeded] recovery table re-renders with the synced data');
+  }, 400);
+})();
+
 // ---- Scenario 3: POST /api/sync/downsell fails (e.g. Cockpit token invalid) ----
 (function scenarioSyncError(){
   const fetchImpl = `
