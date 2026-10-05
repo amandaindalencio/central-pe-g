@@ -1647,18 +1647,16 @@ function renderNpsCsatSection(){
 function buildOverviewInsights(){
   const insights = [];
 
-  // 1) Help Flag prediz churn? — cruza RAW.helpFlagByMonth x RAW.churnByMonth
+  // 1) Help Flag prediz churn? — mantido estático por pedido explícito (05/10):
+  // a tentativa de recalcular isso cruzando RAW.helpFlagByMonth x RAW.churnByMonth
+  // por nome deu 0% (bug real — provavelmente mismatch de nome/categoria entre
+  // as duas fontes), então volta a usar RAW.helpFlagChurnCross (snapshot da
+  // coleta de 21/09) até isso ser investigado com calma.
   (function(){
-    const hfMonths = Object.keys(RAW.helpFlagByMonth||{}).sort();
-    let totalFlagged = 0, totalChurned = 0;
-    hfMonths.forEach(m=>{
-      const flagged = (RAW.helpFlagByMonth[m]||[]).filter(r=>r.hs!=null && r.hs<=21);
-      if(!flagged.length) return;
-      const churnedNames = new Set((RAW.churnByMonth[nextMonthKey(m)]||[]).map(r=>r.name));
-      totalFlagged += flagged.length;
-      totalChurned += flagged.filter(r=>churnedNames.has(r.name)).length;
-    });
-    if(totalFlagged) insights.push(`Cruzando o histórico sincronizado, <strong>${(100*totalChurned/totalFlagged).toFixed(1)}%</strong> dos clientes com HS≤21 num mês deram churn no mês seguinte (${totalChurned} de ${totalFlagged}) — Help Flag antecipa risco real, não é só ruído.`);
+    const cross = RAW.helpFlagChurnCross || {};
+    const tf = Object.values(cross).reduce((a,v)=>a+v.flaggedCount,0);
+    const tc = Object.values(cross).reduce((a,v)=>a+v.churnedNextMonth.length,0);
+    if(tf) insights.push(`Do histórico Jan–Ago, <strong>${(100*tc/tf).toFixed(1)}%</strong> dos clientes com HS≤21 num mês deram churn no mês seguinte (${tc} de ${tf}) — Help Flag antecipa risco real, não é só ruído.`);
   })();
 
   // 2) pedidos de churn confirmado (Solicitação Churn) nos últimos 7 dias — RAW.forecastItems + data de hoje
@@ -1838,10 +1836,12 @@ const SYNC_SERVICES = [
   {
     id: 'helpflag', label: 'Help Flag', staleAfterMs: 24*3600*1000,
     onData: (data) => {
-      RAW.helpFlagByMonth = data;
+      RAW.helpFlagByMonth = data.byMonth;
+      RAW.hfWeeklyTrend = data.weeklyTrend;
       renderHelpFlagSection();
       buildHfGovernanceGrid();
       buildHfEvoChart();
+      buildHfWeeklyTrendTable();
       buildOverviewInsights();
     },
   },

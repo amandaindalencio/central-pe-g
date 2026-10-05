@@ -140,7 +140,10 @@ window.fetch = async (url, opts) => {
 window.fetch = async (url, opts) => {
   if (url === '/api/data/helpflag') {
     return { ok:true, json: async () => ({
-      data: { payload: { '2026-01': [{name:'CLIENTE HELPFLAG FAKE', squad:'Invictus', coord:'jefferson.vieira', am:'Maria', hs:15}] } },
+      data: { payload: {
+        byMonth: { '2026-01': [{name:'CLIENTE HELPFLAG FAKE', squad:'Invictus', coord:'jefferson.vieira', am:'Maria', hs:15}] },
+        weeklyTrend: { weeks: ['2026-09-26'], byCoord: { 'jefferson.vieira': [{flagged:1, total:1, pct:100}] } }
+      } },
       status: { status:'ok', updatedAt: Date.now()-1800000, error:null }
     }) };
   }
@@ -177,14 +180,17 @@ window.fetch = async (url, opts) => {
     if (!window.__helpflagSynced) return { ok:true, json: async () => ({ data:null, status:{status:'ok', updatedAt:Date.now(), error:null} }) };
     return { ok:true, json: async () => ({
       data: { payload: {
-        '2026-01': [
-          {name:'CLIENTE INSIGHT FAKE A', squad:'Invictus', coord:'jefferson.vieira', am:'Maria', hs:5},
-          {name:'CLIENTE INSIGHT FAKE B', squad:'Invictus', coord:'jefferson.vieira', am:'Maria', hs:5}
-        ],
-        '2026-02': [
-          {name:'CLIENTE INSIGHT FAKE A', squad:'Invictus', coord:'jefferson.vieira', am:'Maria', hs:28},
-          {name:'CLIENTE INSIGHT FAKE B', squad:'Invictus', coord:'jefferson.vieira', am:'Maria', hs:28}
-        ]
+        byMonth: {
+          '2026-01': [
+            {name:'CLIENTE INSIGHT FAKE A', squad:'Invictus', coord:'jefferson.vieira', am:'Maria', hs:5},
+            {name:'CLIENTE INSIGHT FAKE B', squad:'Invictus', coord:'jefferson.vieira', am:'Maria', hs:5}
+          ],
+          '2026-02': [
+            {name:'CLIENTE INSIGHT FAKE A', squad:'Invictus', coord:'jefferson.vieira', am:'Maria', hs:28},
+            {name:'CLIENTE INSIGHT FAKE B', squad:'Invictus', coord:'jefferson.vieira', am:'Maria', hs:28}
+          ]
+        },
+        weeklyTrend: { weeks: ['2026-09-26'], byCoord: { 'jefferson.vieira': [{flagged:0, total:2, pct:0}] } }
       } },
       status: { status:'ok', updatedAt: Date.now(), error:null }
     }) };
@@ -200,6 +206,8 @@ window.fetch = async (url, opts) => {
     assert(dom.window.__errors.length===0, '[insights-refresh] no JS errors after the sync that should refresh insights');
     assert(before !== after, '[insights-refresh] overview-insights HTML actually changes after a Help Flag sync (was frozen at first load before this fix)');
     assert(after.includes('HS≤21') && (after.includes('Janeiro') || after.includes('Fevereiro')), '[insights-refresh] refreshed insight reflects the newly-synced months, not the old static snapshot');
+    const weeklyTable = doc.getElementById('hf-weekly-trend').innerHTML;
+    assert(weeklyTable.includes('26/09'), '[insights-refresh] 12-week heatmap (hf-weekly-trend) also re-renders from the synced weeklyTrend, not stuck on the old static snapshot');
   }, 400);
 })();
 
