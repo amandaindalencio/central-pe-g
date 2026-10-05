@@ -156,6 +156,53 @@ window.fetch = async (url, opts) => {
   }, 400);
 })();
 
+// ---- Scenario 2f: overview insights recompute after a sync, not frozen at first load (05/10 fix) ----
+(function scenarioInsightsRefreshOnSync(){
+  // The initial page load already calls /api/data/helpflag once (via initSync's
+  // syncRefreshFromApi) before any explicit sync — so the fake payload must only
+  // start being served AFTER the POST /api/sync/helpflag, otherwise "before" would
+  // already reflect it too and the before/after comparison would be meaningless.
+  const fetchImpl = `
+window.__helpflagSynced = false;
+window.fetch = async (url, opts) => {
+  if (opts && opts.method === 'POST' && url === '/api/sync/helpflag') {
+    window.__helpflagSynced = true;
+    return { ok:true, json: async () => ({ ok:true, updatedAt: Date.now() }) };
+  }
+  if (url === '/api/data/helpflag') {
+    // status carries a FRESH updatedAt (but no data) so initSync's own
+    // staleness check never auto-triggers a sync on its own — otherwise
+    // that auto-sync (not our explicit runSync below) would be the one
+    // applying the fake payload, and before/after would already match.
+    if (!window.__helpflagSynced) return { ok:true, json: async () => ({ data:null, status:{status:'ok', updatedAt:Date.now(), error:null} }) };
+    return { ok:true, json: async () => ({
+      data: { payload: {
+        '2026-01': [
+          {name:'CLIENTE INSIGHT FAKE A', squad:'Invictus', coord:'jefferson.vieira', am:'Maria', hs:5},
+          {name:'CLIENTE INSIGHT FAKE B', squad:'Invictus', coord:'jefferson.vieira', am:'Maria', hs:5}
+        ],
+        '2026-02': [
+          {name:'CLIENTE INSIGHT FAKE A', squad:'Invictus', coord:'jefferson.vieira', am:'Maria', hs:28},
+          {name:'CLIENTE INSIGHT FAKE B', squad:'Invictus', coord:'jefferson.vieira', am:'Maria', hs:28}
+        ]
+      } },
+      status: { status:'ok', updatedAt: Date.now(), error:null }
+    }) };
+  }
+  return { ok:true, json: async () => ({ data:null, status:null }) };
+};`;
+  const dom = loadDom(fetchImpl);
+  const doc = dom.window.document;
+  setTimeout(async ()=>{
+    const before = doc.getElementById('overview-insights').innerHTML;
+    await dom.window.runSync(['helpflag']);
+    const after = doc.getElementById('overview-insights').innerHTML;
+    assert(dom.window.__errors.length===0, '[insights-refresh] no JS errors after the sync that should refresh insights');
+    assert(before !== after, '[insights-refresh] overview-insights HTML actually changes after a Help Flag sync (was frozen at first load before this fix)');
+    assert(after.includes('HS≤21') && (after.includes('Janeiro') || after.includes('Fevereiro')), '[insights-refresh] refreshed insight reflects the newly-synced months, not the old static snapshot');
+  }, 400);
+})();
+
 // ---- Scenario 3: POST /api/sync/downsell fails (e.g. Cockpit token invalid) ----
 (function scenarioSyncError(){
   const fetchImpl = `

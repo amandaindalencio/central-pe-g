@@ -164,6 +164,17 @@ setTimeout(()=>{
   // --- TEST: Help Flag month/squad selectors (item 3) ---
   assert(doc.getElementById('hf-month-select').options.length > 1, 'hf month select populated');
   assert(doc.getElementById('hf-squad-select').options.length > 1, 'hf squad select populated');
+
+  // --- TEST: October (MTD) now visible in Help Flag and NPS/CSAT, without touching Churn/Downsell/Renovação's own "Geral" scope (05/10) ---
+  (function checkOctoberVisibility(){
+    const hfOpts = Array.from(doc.getElementById('hf-month-select').options).map(o=>o.value);
+    assert(hfOpts.includes('2026-10'), 'hf month select includes Outubro (2026-10)');
+    const npscxOpts = Array.from(doc.getElementById('npscx-month-select').options).map(o=>o.value);
+    assert(npscxOpts.includes('2026-10'), 'npscx month select includes Outubro (2026-10)');
+    // Churn's own month list/scope is untouched — still exactly Jan..Out via its own CHURN_MONTHS (pre-existing), not a new regression from MONTHS_INCL_OCT
+    const churnOpts = Array.from(doc.getElementById('churn-month-select').options).map(o=>o.value);
+    assert(churnOpts.filter(v=>v==='2026-10').length === 1, 'churn month select still has exactly one Outubro option (no duplicate from MONTHS_INCL_OCT)');
+  })();
   const hfKpiAll = doc.getElementById('kpi-helpflag').innerHTML;
   fireChange('hf-month-select', '2026-01');
   const hfKpiJan = doc.getElementById('kpi-helpflag').innerHTML;
@@ -338,8 +349,8 @@ setTimeout(()=>{
   assert(insightsHTML.includes('Help Flag antecipa risco real'), 'kept insight: Help Flag predicts churn');
   assert(insightsHTML.includes('Previsão'), 'new insight: novos projetos na Previsão de Churn');
   assert(insightsHTML.includes('de MRR'), 'new-forecast insight includes total MRR of the entrants');
-  assert(insightsHTML.includes('Carteira ativa') && insightsHTML.includes('HS≤21'), 'new insight: carteira-wide HS≤21 trend present (now computed dynamically from RAW.hfWeeklyTrend)');
-  assert(insightsHTML.includes('maior piora na semana'), 'new insight: pior coordenação da semana');
+  assert(insightsHTML.includes('Carteira ativa') && insightsHTML.includes('HS≤21'), 'new insight: carteira-wide HS≤21 trend present (now computed dynamically from RAW.helpFlagByMonth, month-over-month since 05/10 rewrite)');
+  assert(insightsHTML.includes('maior piora'), 'new insight: pior coordenação (month-over-month wording since 05/10 rewrite, was "na semana")');
   assert(insightsHTML.includes('respostas de NPS') && insightsHTML.includes('CSAT V4'), 'new insight: respostas NPS/CSAT recebidas');
 
   console.log('--- final window errors ---');

@@ -650,8 +650,13 @@ const MONTHS = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','202
 const MONTH_LABEL = {'2026-01':'Janeiro','2026-02':'Fevereiro','2026-03':'Março','2026-04':'Abril','2026-05':'Maio','2026-06':'Junho','2026-07':'Julho','2026-08':'Agosto','2026-09':'Setembro','2026-10':'Outubro','2026-11':'Novembro','2026-12':'Dezembro'};
 const MONTH_SHORT = {'2026-01':'Jan','2026-02':'Fev','2026-03':'Mar','2026-04':'Abr','2026-05':'Mai','2026-06':'Jun','2026-07':'Jul','2026-08':'Ago','2026-09':'Set','2026-10':'Out','2026-11':'Nov','2026-12':'Dez'};
 const CHURN_MONTHS = [...MONTHS, '2026-10'];
+// Help Flag e NPS/CSAT ganharam outubro (MTD) nesta rodada — usam essa lista
+// em vez de MONTHS puro pra não mexer no "Geral" de Churn/Downsell/Renovação
+// (que continuam tratando outubro como mês parcial à parte, de propósito).
+const MONTHS_INCL_OCT = CHURN_MONTHS;
 function prevMonthKey(m){ if(m==='2026-10') return '2026-09'; const i = MONTHS.indexOf(m); return i>0 ? MONTHS[i-1] : null; }
-function monthOptionsHTML(){ return `<option value="all">Geral (Jan–Set)</option>` + MONTHS.map(m=>`<option value="${m}">${MONTH_LABEL[m]}${m==='2026-09'?' (MTD)':''}</option>`).join(''); }
+function nextMonthKey(m){ const [y,mo] = m.split('-').map(Number); return new Date(Date.UTC(y,mo,1)).toISOString().slice(0,7); }
+function monthOptionsHTML(){ return `<option value="all">Geral (Jan–Out)</option>` + MONTHS_INCL_OCT.map(m=>`<option value="${m}">${MONTH_LABEL[m]}${m==='2026-10'?' (MTD)':''}</option>`).join(''); }
 function churnMonthOptionsHTML(){ return `<option value="all">Geral (Jan–Out)</option>` + CHURN_MONTHS.map(m=>`<option value="${m}">${MONTH_LABEL[m]}${m==='2026-10'?' (MTD)':''}</option>`).join(''); }
 
 /* ---- churn / downsell row accessors ---- */
@@ -1013,7 +1018,7 @@ function buildPrevisaoRiskTable(squad){
 let helpflagMonth = 'all';
 let helpflagSquadSel = 'all';
 function helpFlagRows(month, squad){
-  let rows = month==='all' ? MONTHS.flatMap(m=>RAW.helpFlagByMonth[m]||[]) : (RAW.helpFlagByMonth[month]||[]);
+  let rows = month==='all' ? MONTHS_INCL_OCT.flatMap(m=>RAW.helpFlagByMonth[m]||[]) : (RAW.helpFlagByMonth[month]||[]);
   if(squad && squad!=='all') rows = rows.filter(r=>r.squad===squad);
   return rows;
 }
@@ -1022,14 +1027,13 @@ function hfStats(rows){
   return {total, flagged, pct: total ? +(100*flagged/total).toFixed(2) : null};
 }
 function hfMonthOptionsHTML(){
-  return `<option value="all">Geral (Jan–Set)</option>` + MONTHS.map(m=>`<option value="${m}">${MONTH_LABEL[m]||m}/2026</option>`).join('');
+  return `<option value="all">Geral (Jan–Out)</option>` + MONTHS_INCL_OCT.map(m=>`<option value="${m}">${MONTH_LABEL[m]||m}/2026${m==='2026-10'?' (MTD)':''}</option>`).join('');
 }
 function renderHelpFlagSection(){
-  document.getElementById('hf-scope-note').innerHTML = `Health Score (0–30) por cliente/mês — só carteira ativa hoje (quem já churnou não aparece em nenhum mês do histórico; ver Limitações). Recorte: <strong>${scopeLabel(helpflagMonth)}</strong>${helpflagSquadSel!=='all'?' · '+helpflagSquadSel:''}. Dados reconstruídos em 21/09/2026 — sem novo ponto semanal desde então (histórico é LOCF semanal aos sábados; último sábado 19/09).`;
+  document.getElementById('hf-scope-note').innerHTML = `Health Score (0–30) por cliente/mês — só carteira ativa hoje (quem já churnou não aparece em nenhum mês do histórico; ver Limitações). Recorte: <strong>${scopeLabel(helpflagMonth)}</strong>${helpflagSquadSel!=='all'?' · '+helpflagSquadSel:''}. Histórico é LOCF semanal aos sábados.`;
   const rows = helpFlagRows(helpflagMonth, helpflagSquadSel);
   const cur = hfStats(rows);
-  const mIdx = MONTHS.indexOf(helpflagMonth);
-  const prevMonth = mIdx>0 ? MONTHS[mIdx-1] : null;
+  const prevMonth = helpflagMonth==='all' ? null : prevMonthKey(helpflagMonth);
   const prev = prevMonth ? hfStats(helpFlagRows(prevMonth, helpflagSquadSel)) : null;
   const d = prev && prev.pct!=null && cur.pct!=null ? deltaKpi(cur.pct, prev.pct, false, true) : {delta:'',dir:''};
   const kpis = [{label:'Unidade · HS≤21', value:fmtPct(cur.pct), sub:cur.flagged+' de '+cur.total+' elegíveis'+(prev?` (${MONTH_SHORT[prevMonth]}: ${fmtPct(prev.pct)})`:''), delta:d.delta+(d.delta?' vs mês anterior':''), dir:d.dir, color:'red'}];
@@ -1048,11 +1052,11 @@ function renderHelpFlagSection(){
   buildHfChurnCrossBox();
 }
 function buildHfEvoChart(){
-  const vals = MONTHS.map(m=>hfStats(helpFlagRows(m, 'all')).pct);
+  const vals = MONTHS_INCL_OCT.map(m=>hfStats(helpFlagRows(m, 'all')).pct);
   if(window._hfEvoChart) window._hfEvoChart.destroy();
   window._hfEvoChart = new Chart(document.getElementById('chartHfEvo'), {
     type:'line',
-    data:{labels:MONTHS.map(m=>MONTH_SHORT[m]),datasets:[{label:'% HS≤21',data:vals,borderColor:'#DC2626',backgroundColor:'#DC262633',borderWidth:2,pointRadius:3,tension:.3,fill:true,spanGaps:true}]},
+    data:{labels:MONTHS_INCL_OCT.map(m=>MONTH_SHORT[m]),datasets:[{label:'% HS≤21',data:vals,borderColor:'#DC2626',backgroundColor:'#DC262633',borderWidth:2,pointRadius:3,tension:.3,fill:true,spanGaps:true}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+ctx.raw.toFixed(1)+'%'}}},
       scales:{x:{grid:{display:false},ticks:{color:'rgba(28,25,23,.65)',font:{size:11}}},y:{grid:{color:'rgba(28,25,23,.08)'},ticks:{color:'rgba(28,25,23,.55)',font:{size:10},callback:v=>v+'%'}}}}
   });
@@ -1185,8 +1189,10 @@ async function initGovernance(){
 }
 function buildHfGovernanceGrid(){
   const rows = helpFlagRows(helpflagMonth, helpflagSquadSel);
-  // carteira atual = último mês coletado (Set/2026), já restrito a clientes ativos hoje (helpFlagByMonth é construído com filterByStatus=active)
-  const currentRoster = (RAW.helpFlagByMonth['2026-09']||[]).filter(r=>!helpflagSquadSel||helpflagSquadSel==='all'||r.squad===helpflagSquadSel);
+  // carteira atual = último mês com dado sincronizado, já restrito a clientes ativos hoje (helpFlagByMonth é construído com filterByStatus=active)
+  const hfMonthsAvail = MONTHS_INCL_OCT.filter(m=>(RAW.helpFlagByMonth[m]||[]).length>0);
+  const latestHfMonth = hfMonthsAvail[hfMonthsAvail.length-1];
+  const currentRoster = (RAW.helpFlagByMonth[latestHfMonth]||[]).filter(r=>!helpflagSquadSel||helpflagSquadSel==='all'||r.squad===helpflagSquadSel);
   const coords = [...new Set(rows.map(r=>r.coord))].filter(c=>ACTIVE_COORDS.includes(c)).sort((a,b)=>formatName(a).localeCompare(formatName(b)));
   document.getElementById('hf-governance-grid').innerHTML = coords.map((c,i)=>{
     const st = govState[c];
@@ -1278,7 +1284,7 @@ function npscxMonthlyByProject(){
   const map = {};
   npscxCleanResponses().forEach(r=>{
     const mk = r.csat_date.slice(0,7);
-    if(!MONTHS.includes(mk)) return;
+    if(!MONTHS_INCL_OCT.includes(mk)) return;
     map[r.project_id] = map[r.project_id] || {};
     const ex = map[r.project_id][mk];
     if(!ex || r.csat_date >= ex.csat_date) map[r.project_id][mk] = r;
@@ -1337,11 +1343,11 @@ function csatAvgs(rows){
   return out;
 }
 function npscxLatestMonthWithData(){
-  for(let i=MONTHS.length-1;i>=0;i--){ if(npscxRowsForMonth(MONTHS[i],'all').length>0) return MONTHS[i]; }
-  return MONTHS[MONTHS.length-1];
+  for(let i=MONTHS_INCL_OCT.length-1;i>=0;i--){ if(npscxRowsForMonth(MONTHS_INCL_OCT[i],'all').length>0) return MONTHS_INCL_OCT[i]; }
+  return MONTHS_INCL_OCT[MONTHS_INCL_OCT.length-1];
 }
 function npscxTrendOf(pid){
-  const clean = npscxCleanResponses().filter(r=>r.project_id===pid && MONTHS.includes(r.csat_date.slice(0,7))).sort((a,b)=>a.csat_date<b.csat_date?-1:1);
+  const clean = npscxCleanResponses().filter(r=>r.project_id===pid && MONTHS_INCL_OCT.includes(r.csat_date.slice(0,7))).sort((a,b)=>a.csat_date<b.csat_date?-1:1);
   if(clean.length<2) return {dir:'stable', delta:0};
   const last = clean[clean.length-1], prev = clean[clean.length-2];
   if(last.nps==null||prev.nps==null) return {dir:'stable', delta:0};
@@ -1386,14 +1392,14 @@ function buildPacingTab(){
 
 function buildVisaoTab(){
   const selMonth = npscxMonth==='all' ? npscxLatestMonthWithData() : npscxMonth;
-  const monthlySeries = MONTHS.map(m=>({m, stats:npsStats(npscxRowsForMonth(m, npscxSquad))}));
+  const monthlySeries = MONTHS_INCL_OCT.map(m=>({m, stats:npsStats(npscxRowsForMonth(m, npscxSquad))}));
   const curRows = npscxRows(npscxMonth, npscxSquad);
   const curStats = npsStats(curRows);
   const curCsat = csatAvgs(curRows);
 
   if(window._npscxEvoChart) window._npscxEvoChart.destroy();
   window._npscxEvoChart = new Chart(document.getElementById('npscxEvoChart'), {
-    data:{labels:MONTHS.map(m=>MONTH_SHORT[m]),datasets:[
+    data:{labels:MONTHS_INCL_OCT.map(m=>MONTH_SHORT[m]),datasets:[
       {type:'bar',label:'Respostas',data:monthlySeries.map(s=>s.stats.count),yAxisID:'y2',order:2,
         backgroundColor:monthlySeries.map(s=>s.m===selMonth?'#D6281A':'rgba(28,25,23,.08)'),borderColor:'rgba(28,25,23,.18)',borderWidth:1,borderRadius:4},
       {type:'line',label:'NPS Score (%)',data:monthlySeries.map(s=>s.stats.npsScore),yAxisID:'y',order:1,
@@ -1472,8 +1478,8 @@ function buildSquadTab(){
   if(window._npscxSquadNpsEvo) window._npscxSquadNpsEvo.destroy();
   window._npscxSquadNpsEvo = new Chart(document.getElementById('npscxSquadNpsEvo'), {
     type:'line',
-    data:{labels:MONTHS.map(m=>MONTH_SHORT[m]),datasets:ACTIVE_SQUADS.map(sq=>({
-      label:sq, data:MONTHS.map(m=>npsStats(npscxRowsForMonth(m,sq)).npsScore),
+    data:{labels:MONTHS_INCL_OCT.map(m=>MONTH_SHORT[m]),datasets:ACTIVE_SQUADS.map(sq=>({
+      label:sq, data:MONTHS_INCL_OCT.map(m=>npsStats(npscxRowsForMonth(m,sq)).npsScore),
       borderColor:SQUAD_COLOR[sq],backgroundColor:SQUAD_COLOR[sq]+'22',borderWidth:2,pointRadius:3,tension:.3,spanGaps:true
     }))},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'rgba(28,25,23,.65)',font:{size:10}}}},
@@ -1534,7 +1540,7 @@ function buildCoordTab(){
     chartFn: (e,canvasId)=>{
       new Chart(document.getElementById(canvasId), {
         type:'line',
-        data:{labels:MONTHS.map(m=>MONTH_SHORT[m]),datasets:[{label:'NPS Score',data:MONTHS.map(m=>npsStats(rowsForCoord(e.key,m)).npsScore),borderColor:'#D6281A',backgroundColor:'rgba(214,40,26,.08)',borderWidth:2,pointRadius:3,tension:.3,fill:true,spanGaps:true}]},
+        data:{labels:MONTHS_INCL_OCT.map(m=>MONTH_SHORT[m]),datasets:[{label:'NPS Score',data:MONTHS_INCL_OCT.map(m=>npsStats(rowsForCoord(e.key,m)).npsScore),borderColor:'#D6281A',backgroundColor:'rgba(214,40,26,.08)',borderWidth:2,pointRadius:3,tension:.3,fill:true,spanGaps:true}]},
         options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+'%',color:'rgba(28,25,23,.55)'},grid:{color:'rgba(28,25,23,.08)'}},x:{grid:{display:false},ticks:{color:'rgba(28,25,23,.55)',font:{size:9}}}}}
       });
     },
@@ -1562,7 +1568,7 @@ function buildCoordTab(){
 }
 
 function buildAlertasTab(){
-  const todayIso = '2026-09-29';
+  const todayIso = new Date().toISOString().slice(0,10);
   const latestPerProject = npscxRowsGeral(npscxSquad, 'all');
 
   const detractors = latestPerProject.filter(r=>r.nps!=null && r.nps<=6).sort((a,b)=>a.nps-b.nps);
@@ -1634,72 +1640,102 @@ function renderNpsCsatSection(){
    nenhum número fica "congelado" numa rodada de coleta antiga. Só a janela "últimos 7 dias" do
    insight de novos pedidos precisa de um asOf/from/to atualizados manualmente a cada coleta
    (RAW.weeklyReadings.newForecastLast7d) — todo o resto deriva 100% de dados já vivos no RAW. */
-function buildOverviewInsights(ctx){
+// Os 5 cards da "Leitura da semana" são recalculados 100% a partir do RAW
+// toda vez que essa função roda — inclusive depois de cada sincronização
+// (ver chamadas em SYNC_SERVICES mais abaixo), não só no load da página.
+// Nenhuma leitura fixa/congelada: se o RAW mudou (sync novo), o texto muda.
+function buildOverviewInsights(){
   const insights = [];
-  const wr = RAW.weeklyReadings || {};
 
-  // 1) Help Flag prediz churn? (dinâmico — RAW.helpFlagChurnCross)
-  const cross = RAW.helpFlagChurnCross || {};
-  const tf = Object.values(cross).reduce((a,v)=>a+v.flaggedCount,0);
-  const tc = Object.values(cross).reduce((a,v)=>a+v.churnedNextMonth.length,0);
-  if(tf) insights.push(`Do histórico Jan–Ago, <strong>${(100*tc/tf).toFixed(1)}%</strong> dos clientes com HS≤21 num mês deram churn no mês seguinte (${tc} de ${tf}) — Help Flag antecipa risco real, não é só ruído.`);
+  // 1) Help Flag prediz churn? — cruza RAW.helpFlagByMonth x RAW.churnByMonth
+  (function(){
+    const hfMonths = Object.keys(RAW.helpFlagByMonth||{}).sort();
+    let totalFlagged = 0, totalChurned = 0;
+    hfMonths.forEach(m=>{
+      const flagged = (RAW.helpFlagByMonth[m]||[]).filter(r=>r.hs!=null && r.hs<=21);
+      if(!flagged.length) return;
+      const churnedNames = new Set((RAW.churnByMonth[nextMonthKey(m)]||[]).map(r=>r.name));
+      totalFlagged += flagged.length;
+      totalChurned += flagged.filter(r=>churnedNames.has(r.name)).length;
+    });
+    if(totalFlagged) insights.push(`Cruzando o histórico sincronizado, <strong>${(100*totalChurned/totalFlagged).toFixed(1)}%</strong> dos clientes com HS≤21 num mês deram churn no mês seguinte (${totalChurned} de ${totalFlagged}) — Help Flag antecipa risco real, não é só ruído.`);
+  })();
 
-  // 2) projetos novos na Previsão de Churn (dinâmico sobre RAW.forecastItems; só a janela de datas é fixada manualmente)
-  if(wr.newForecastLast7d){
-    const w = wr.newForecastLast7d;
-    const lo = w.fromDate.split('/').reverse().join(''), hi = w.toDate.split('/').reverse().join('');
-    const novos = (RAW.forecastItems||[]).filter(f=>{ const d=f.requestDate.split('/'); const key=d[2]+d[1]+d[0]; return key>=lo && key<=hi; });
-    insights.push(`<strong>${novos.length}</strong> novo(s) pedido(s) de churn confirmado(s) (Solicitação Churn), totalizando <strong>${fmtBRL(sumBy(novos,f=>f.fee))}</strong> de MRR, entrou/entraram na Previsão entre ${w.fromDate} e ${w.toDate}.`);
-  }
+  // 2) pedidos de churn confirmado (Solicitação Churn) nos últimos 7 dias — RAW.forecastItems + data de hoje
+  (function(){
+    const now = new Date();
+    const toKey = now.toISOString().slice(0,10).replace(/-/g,'');
+    const fromDate = new Date(now.getTime()-7*86400000);
+    const fromKey = fromDate.toISOString().slice(0,10).replace(/-/g,'');
+    const toBr = ddmmFromIso(now.toISOString().slice(0,10)), fromBr = ddmmFromIso(fromDate.toISOString().slice(0,10));
+    const novos = (RAW.forecastItems||[]).filter(f=>{
+      if(!f.requestDate) return false;
+      const d = f.requestDate.split('/'); const key = d[2]+d[1]+d[0];
+      return key>=fromKey && key<=toKey;
+    });
+    insights.push(`<strong>${novos.length}</strong> novo(s) pedido(s) de churn confirmado(s) (Solicitação Churn), totalizando <strong>${fmtBRL(sumBy(novos,f=>f.fee))}</strong> de MRR, entrou/entraram na Previsão entre ${fromBr} e ${toBr}.`);
+  })();
 
-  // 3) tendência de HS≤21 na carteira ativa (dinâmico — RAW.hfWeeklyTrend, primeira vs última semana disponível)
-  const trend = RAW.hfWeeklyTrend;
-  if(trend && trend.weeks.length>1){
-    const coords = Object.keys(trend.byCoord);
-    const agg = w => coords.reduce((a,c)=>{ const d=trend.byCoord[c][w]; return {flagged:a.flagged+d.flagged, total:a.total+d.total}; }, {flagged:0,total:0});
-    const first = agg(0), last = agg(trend.weeks.length-1);
+  // 3) tendência de HS≤21 na carteira ativa — primeiro vs último mês com dado em RAW.helpFlagByMonth
+  (function(){
+    const hfMonths = Object.keys(RAW.helpFlagByMonth||{}).filter(m=>(RAW.helpFlagByMonth[m]||[]).length>0).sort();
+    if(hfMonths.length<2) return;
+    const statsFor = m => { const withHs=(RAW.helpFlagByMonth[m]||[]).filter(r=>r.hs!=null); return {total:withHs.length, flagged:withHs.filter(r=>r.hs<=21).length}; };
+    const mFirst = hfMonths[0], mLast = hfMonths[hfMonths.length-1];
+    const first = statsFor(mFirst), last = statsFor(mLast);
     const pctFirst = first.total?100*first.flagged/first.total:null, pctLast = last.total?100*last.flagged/last.total:null;
-    if(pctFirst!=null && pctLast!=null){
-      const wkFirst = trend.weeks[0].slice(8,10)+'/'+trend.weeks[0].slice(5,7), wkLast = trend.weeks[trend.weeks.length-1].slice(8,10)+'/'+trend.weeks[trend.weeks.length-1].slice(5,7);
+    if(pctFirst!=null && pctLast!=null && mFirst!==mLast){
       const diff = pctLast-pctFirst;
-      insights.push(`Carteira ativa (coordenações acompanhadas): HS≤21 foi de <strong>${fmtPct(pctFirst)}</strong> (${wkFirst}) para <strong>${fmtPct(pctLast)}</strong> (${wkLast}) — ${diff>0?'piorou':diff<0?'melhorou':'estável'} ${Math.abs(diff).toFixed(1)}pp em ${trend.weeks.length} semanas.`);
+      insights.push(`Carteira ativa: HS≤21 foi de <strong>${fmtPct(pctFirst)}</strong> (${MONTH_LABEL[mFirst]||mFirst}) para <strong>${fmtPct(pctLast)}</strong> (${MONTH_LABEL[mLast]||mLast}) — ${diff>0?'piorou':diff<0?'melhorou':'estável'} ${Math.abs(diff).toFixed(1)}pp.`);
     }
-  }
+  })();
 
-  // 4) pior coordenação da semana (dinâmico — RAW.hfWeeklyTrend, últimas duas semanas)
-  if(trend && trend.weeks.length>1){
-    const li = trend.weeks.length-1;
+  // 4) coordenação com maior piora — últimos dois meses com dado em RAW.helpFlagByMonth
+  (function(){
+    const hfMonths = Object.keys(RAW.helpFlagByMonth||{}).filter(m=>(RAW.helpFlagByMonth[m]||[]).length>0).sort();
+    if(hfMonths.length<2) return;
+    const mCur = hfMonths[hfMonths.length-1], mPrev = hfMonths[hfMonths.length-2];
+    const byCoord = m => {
+      const map = {};
+      (RAW.helpFlagByMonth[m]||[]).forEach(r=>{
+        if(!ACTIVE_COORDS.includes(r.coord) || r.hs==null) return;
+        const e = map[r.coord] = map[r.coord]||{total:0,flagged:0};
+        e.total++; if(r.hs<=21) e.flagged++;
+      });
+      return map;
+    };
+    const cur = byCoord(mCur), prev = byCoord(mPrev);
     let worst = null;
-    Object.keys(trend.byCoord).forEach(c=>{
-      const cur = trend.byCoord[c][li], prev = trend.byCoord[c][li-1];
-      if(cur.pct==null || prev.pct==null) return;
-      const diff = cur.pct-prev.pct;
-      if(!worst || diff>worst.diff) worst = {coord:c, diff, cur, prev};
+    Object.keys(cur).forEach(c=>{
+      if(!prev[c] || !cur[c].total || !prev[c].total) return;
+      const pctCur = 100*cur[c].flagged/cur[c].total, pctPrev = 100*prev[c].flagged/prev[c].total;
+      const diff = pctCur-pctPrev;
+      if(!worst || diff>worst.diff) worst = {coord:c, diff, pctCur, pctPrev};
     });
     if(worst && worst.diff>0){
-      const wkPrev = trend.weeks[li-1].slice(8,10)+'/'+trend.weeks[li-1].slice(5,7), wkCur = trend.weeks[li].slice(8,10)+'/'+trend.weeks[li].slice(5,7);
-      insights.push(`<strong>${formatName(worst.coord)}</strong> foi a coordenação com maior piora na semana (${wkPrev}→${wkCur}): HS≤21 foi de ${fmtPct(worst.prev.pct)} para ${fmtPct(worst.cur.pct)} (+${worst.diff.toFixed(1)}pp).`);
+      insights.push(`<strong>${formatName(worst.coord)}</strong> foi a coordenação com maior piora (${MONTH_LABEL[mPrev]||mPrev}→${MONTH_LABEL[mCur]||mCur}): HS≤21 foi de ${fmtPct(worst.pctPrev)} para ${fmtPct(worst.pctCur)} (+${worst.diff.toFixed(1)}pp).`);
     }
-  }
+  })();
 
-  // 5) respostas recebidas em NPS/CSAT no mês mais recente com dado (dinâmico — nps/csat_unidade_por_mes)
-  const npsArr = RAW.nps_unidade_por_mes||[], csatArr = RAW.csat_unidade_por_mes||[];
-  const lastWithData = arr => [...arr].reverse().find(m=>m.count>0);
-  const npsLast = lastWithData(npsArr), csatLast = lastWithData(csatArr);
-  if(npsLast) insights.push(`<strong>${npsLast.count} respostas de NPS</strong>${csatLast?` e <strong>${csatLast.count} de CSAT V4</strong>`:''} registradas em ${MONTH_LABEL[npsLast.mes]}/2026 (mês mais recente com dado).`);
+  // 5) respostas de NPS/CSAT no mês mais recente com dado — RAW.npsCsatRaw.responses
+  (function(){
+    const responses = (RAW.npsCsatRaw && RAW.npsCsatRaw.responses) || [];
+    if(!responses.length) return;
+    const months = [...new Set(responses.map(r=>r.csat_date && r.csat_date.slice(0,7)).filter(Boolean))].sort();
+    const last = months[months.length-1];
+    if(!last) return;
+    const inMonth = responses.filter(r=>r.csat_date && r.csat_date.slice(0,7)===last);
+    const npsCount = inMonth.filter(r=>r.nps!=null).length, csatCount = inMonth.filter(r=>r.v4!=null).length;
+    insights.push(`<strong>${npsCount} respostas de NPS</strong>${csatCount?` e <strong>${csatCount} de CSAT V4</strong>`:''} registradas em ${MONTH_LABEL[last]||last} (mês mais recente com dado).`);
+  })();
 
   document.getElementById('overview-insights').innerHTML = insights.slice(0,5).map((txt,i)=>
     `<div class="insight-box"><div class="insight-text"><span class="insight-num">${i+1}</span>${txt}</div></div>`
   ).join('');
 }
+function ddmmFromIso(iso){ const d=iso.split('-'); return d[2]+'/'+d[1]+'/'+d[0]; }
 function buildOverview(){
-  const setChurn = churnRows('2026-09','all'), agoChurn = churnRows('2026-08','all');
-  const setV = sumBy(setChurn,r=>r.valor), agoV = sumBy(agoChurn,r=>r.valor);
-  const npsSet = npsFor(RAW.nps_unidade_por_mes,'2026-09'), npsAgo = npsFor(RAW.nps_unidade_por_mes,'2026-08');
-  const forecastTotal = sumBy(RAW.forecastItems, i=>i.fee);
-  const hfSet = hfStats(helpFlagRows('2026-09','all')), hfAgo = hfStats(helpFlagRows('2026-08','all'));
-
-  buildOverviewInsights({setV,agoV,hfSet,hfAgo,npsSet,npsAgo,forecastTotal});
+  buildOverviewInsights();
 
   const trend = MONTHS.map(m=>({mes:MONTH_SHORT[m],valor:sumBy(RAW.churnByMonth[m]||[],r=>r.valor),qty:(RAW.churnByMonth[m]||[]).length}));
   new Chart(document.getElementById('chartChurnEvo'), {
@@ -1779,11 +1815,12 @@ const SYNC_SERVICES = [
       window._npscxClean = null;
       window._npscxMonthly = null;
       renderNpsCsatSection();
+      buildOverviewInsights();
     },
   },
   {
     id: 'churn', label: 'Revenue Churn', staleAfterMs: 24*3600*1000,
-    onData: (data) => { RAW.churnByMonth = data; renderChurnSection(); },
+    onData: (data) => { RAW.churnByMonth = data; renderChurnSection(); buildOverviewInsights(); },
   },
   {
     id: 'previsao', label: 'Previsão', staleAfterMs: 24*3600*1000,
@@ -1795,6 +1832,7 @@ const SYNC_SERVICES = [
       document.getElementById('previsao-month-select').innerHTML = previsaoMonthOptionsHTML();
       renderPrevisao(churnSquadSel);
       buildRecoveryTable(churnSquadSel);
+      buildOverviewInsights();
     },
   },
   {
@@ -1804,6 +1842,7 @@ const SYNC_SERVICES = [
       renderHelpFlagSection();
       buildHfGovernanceGrid();
       buildHfEvoChart();
+      buildOverviewInsights();
     },
   },
 ];
