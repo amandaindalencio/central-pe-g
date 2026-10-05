@@ -490,6 +490,13 @@ code{background:var(--surface-alt);border:1px solid var(--border);padding:1px 5p
   </div>
   <div class="kpi-grid" id="kpi-renovacao"></div>
   <div class="table-card" style="margin-top:8px" id="renovacao-table"></div>
+
+  <div class="chart-title" style="margin:26px 0 12px">Visão Consolidada Anual — projeto × mês</div>
+  <div class="table-card" style="margin-bottom:8px" id="renovacao-annual-table"></div>
+  <p class="section-sub" style="margin:-2px 0 24px">Cada célula é o fee do mês em que o projeto renova. "Total" soma todos os projetos daquele mês.</p>
+
+  <div class="chart-title" style="margin:0 0 12px">Visão Consolidada Anual — por Squad</div>
+  <div id="renovacao-squad-pivots"></div>
 </section>
 
 <footer style="color:var(--text3);font-size:11.5px;line-height:1.7;padding:0 4px 40px">
@@ -1782,6 +1789,49 @@ function buildRenovacaoSection(){
     {label:'Booking (m)',num:true,render:r=>r.bookingMonths,sortVal:r=>r.bookingMonths},
     {label:'Fee',num:true,render:r=>fmtBRL(r.fee),sortVal:r=>r.fee||0}
   ], items, 10, `Clientes com booking definido, categoria Executar — ${renovacaoMonth==='all'?'todos os meses':MONTH_LABEL[renovacaoMonth]+'/2026'} (${items.length})`);
+
+  buildRenovacaoAnnualTables();
+}
+
+// Visão consolidada anual (projeto × mês) pedida em 05/10 — complementa a
+// visão mensal acima, sem mexer nela. Cada linha é um projeto, cada coluna
+// um mês com pelo menos 1 renovação no período todo, célula = fee do mês em
+// que aquele projeto renova (vazio fora dele), última linha soma por mês.
+function renovacaoPivotTableHTML(items, months, opts){
+  opts = opts || {};
+  const monthLabel = m => m.slice(5,7)+'/'+m.slice(0,4);
+  const totals = {};
+  months.forEach(m=>{ totals[m] = sumBy(items.filter(r=>renovacaoMonthKey(r)===m), r=>r.fee||0); });
+  const rows = items.slice().sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
+  const headCells = ['Projeto'].concat(opts.showBooking?['Booking']:[]).concat(months.map(monthLabel));
+  let html = '<div class="table-scroll"><table><thead><tr>' +
+    headCells.map(c=>`<th${c!=='Projeto'&&c!=='Booking'?' class="num" style="text-align:right"':''}>${c}</th>`).join('') +
+    '</tr></thead><tbody>';
+  rows.forEach(r=>{
+    const mk = renovacaoMonthKey(r);
+    html += `<tr><td>${r.name}</td>`;
+    if(opts.showBooking) html += `<td>${r.bookingMonths!=null?r.bookingMonths+'m':'—'}</td>`;
+    months.forEach(m=>{ html += `<td class="num">${m===mk?(r.fee!=null?fmtBRL(r.fee):'sem fee'):''}</td>`; });
+    html += '</tr>';
+  });
+  html += `<tr style="font-weight:700"><td>Total</td>${opts.showBooking?'<td></td>':''}` +
+    months.map(m=>`<td class="num">${fmtBRL(totals[m])}</td>`).join('') + '</tr>';
+  html += '</tbody></table></div>';
+  return html;
+}
+function buildRenovacaoAnnualTables(){
+  const all = renovacaoAllItems();
+  const months = [...new Set(all.map(renovacaoMonthKey))].sort();
+  document.getElementById('renovacao-annual-table').innerHTML = renovacaoPivotTableHTML(all, months, {showBooking:true});
+
+  const noSquadCount = all.filter(r=>!r.squad || r.squad==='Sem squad').length;
+  document.getElementById('renovacao-squad-pivots').innerHTML = ACTIVE_SQUADS.map(sq=>{
+    const items = all.filter(r=>r.squad===sq);
+    return `<div style="margin-bottom:22px">
+      <div class="squad-name" style="margin-bottom:8px"><span class="sq-dot" style="background:${SQUAD_COLOR[sq]}"></span>${sq}, ${items.length} projeto${items.length===1?'':'s'}</div>
+      <div class="table-card">${renovacaoPivotTableHTML(items, months, {showBooking:false})}</div>
+    </div>`;
+  }).join('') + (noSquadCount ? `<p class="section-sub">+ ${noSquadCount} projeto(s) sem squad definido — fora dos blocos acima.</p>` : '');
 }
 
 /* ============================================================

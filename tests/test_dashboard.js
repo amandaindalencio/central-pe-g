@@ -336,6 +336,24 @@ setTimeout(()=>{
     fireChange('renovacao-month-select', 'all');
   })();
 
+  // --- TEST: Renovação annual consolidated pivot tables (project × month + by-squad, 05/10) ---
+  (function checkRenovacaoAnnualPivots(){
+    const annual = doc.getElementById('renovacao-annual-table');
+    assert(!!annual && annual.innerHTML.trim().length>0, 'renovacao-annual-table renders');
+    assert(annual.innerHTML.includes('Booking'), 'renovacao-annual-table has a Booking column (project-level pivot)');
+    assert(annual.innerHTML.includes('/2026'), 'renovacao-annual-table has MM/2026 month columns');
+    assert(annual.innerHTML.includes('Total'), 'renovacao-annual-table has a Total row');
+    assert(!annual.innerHTML.includes('undefined') && !annual.innerHTML.includes('NaN'), 'no undefined/NaN in renovacao-annual-table');
+
+    const squadPivots = doc.getElementById('renovacao-squad-pivots');
+    assert(!!squadPivots && squadPivots.innerHTML.trim().length>0, 'renovacao-squad-pivots renders');
+    ['Invictus','Billions','Exclusive'].forEach(sq=>{
+      assert(squadPivots.innerHTML.includes(sq), `renovacao-squad-pivots includes a ${sq} block`);
+    });
+    assert(!squadPivots.innerHTML.includes('Booking'), 'renovacao-squad-pivots tables omit the Booking column (project-level only)');
+    assert(!squadPivots.innerHTML.includes('undefined') && !squadPivots.innerHTML.includes('NaN'), 'no undefined/NaN in renovacao-squad-pivots');
+  })();
+
   // NOTE: the old CSAT-evolution-by-squad/coordenação tables were superseded (29/09/2026) by
   // the new 5-tab NPS & CSAT section's Squad/Coordenação tabs, built on real per-response data.
 
