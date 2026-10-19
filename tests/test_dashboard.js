@@ -365,6 +365,21 @@ setTimeout(()=>{
     assert(!squadPivots.innerHTML.includes('undefined') && !squadPivots.innerHTML.includes('NaN'), 'no undefined/NaN in renovacao-squad-pivots');
   })();
 
+  // --- TEST: section title bars stand out in red (19/10) — was the same light-gray background as
+  // inner sub-labels (Coordenação, Previsão de Churn), making it hard to spot a section change while scrolling ---
+  (function checkSectionBarsStandOut(){
+    ['churn-banner','hf-banner','nps-banner'].forEach(id=>{
+      const el = doc.getElementById(id);
+      assert(!!el && el.classList.contains('section-bar-main'), `#${id} carries the new section-bar-main (red) styling`);
+    });
+    const renovacaoBar = doc.querySelector('#section-renovacao .section-bar');
+    assert(!!renovacaoBar && renovacaoBar.classList.contains('section-bar-main'), 'Renovação de Contratos title also carries section-bar-main');
+    // sub-labels inside a section (Coordenação selector, Previsão de Churn sub-header) are NOT section
+    // titles — they must keep the old plain .section-bar look, not turn red too.
+    const coordLabel = doc.getElementById('churn-coord-select').previousElementSibling;
+    assert(coordLabel.textContent.trim()==='Coordenação' && !coordLabel.classList.contains('section-bar-main'), 'inner "Coordenação" sub-label stays unstyled (not a section title)');
+  })();
+
   // NOTE: the old CSAT-evolution-by-squad/coordenação tables were superseded (29/09/2026) by
   // the new 5-tab NPS & CSAT section's Squad/Coordenação tabs, built on real per-response data.
 

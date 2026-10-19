@@ -48,6 +48,10 @@ main{padding:36px clamp(18px,4vw,52px) 90px;max-width:1400px;margin:0 auto;posit
 .section-controls .section-bar{flex:1;margin-bottom:0}
 .controls-right{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .section-bar{background:var(--surface-alt);border-radius:10px;padding:13px 24px;text-align:center;font-size:12px;font-weight:700;font-stretch:75%;color:var(--text2);letter-spacing:.18em;text-transform:uppercase;border:1px solid var(--border)}
+/* Título principal de cada sessão (Revenue Churn / Help Flag / NPS & CSAT / Renovação) — antes usava o
+   mesmo cinza claro dos rótulos internos (Coordenação, Previsão de Churn), o que dificultava notar a
+   troca de sessão ao rolar a central. Agora em vermelho sólido (--accent), bem mais chamativo. */
+.section-bar-main{background:var(--accent);color:#fff;border-color:var(--accent-dark)}
 .v4-select{appearance:none;-webkit-appearance:none;background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2357534E'/%3E%3C/svg%3E") no-repeat right 12px center;border:1px solid var(--border);border-radius:10px;color:var(--text2);font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:9px 34px 9px 14px;cursor:pointer;outline:none;min-width:170px}
 .v4-select:hover{border-color:var(--border-strong)}
 .v4-select option{background:#fff;color:var(--text);font-size:13px;text-transform:none;letter-spacing:0;font-weight:400}
@@ -225,7 +229,7 @@ code{background:var(--surface-alt);border:1px solid var(--border);padding:1px 5p
 
 <section class="section" id="section-churn">
   <div class="section-controls">
-    <div class="section-bar" id="churn-banner">Revenue Churn</div>
+    <div class="section-bar section-bar-main" id="churn-banner">Revenue Churn</div>
     <div class="controls-right">
       <select class="v4-select" id="churn-month-select"></select>
       <select class="v4-select" id="churn-squad-select"><option value="all">Todos os squads</option></select>
@@ -338,7 +342,7 @@ code{background:var(--surface-alt);border:1px solid var(--border);padding:1px 5p
 
 <section class="section" id="section-helpflag">
   <div class="section-controls">
-    <div class="section-bar" id="hf-banner">Help Flag — % clientes com HS ≤ 21</div>
+    <div class="section-bar section-bar-main" id="hf-banner">Help Flag — % clientes com HS ≤ 21</div>
     <div class="controls-right">
       <select class="v4-select" id="hf-month-select"></select>
       <select class="v4-select" id="hf-squad-select"><option value="all">Todos os squads</option></select>
@@ -390,7 +394,7 @@ code{background:var(--surface-alt);border:1px solid var(--border);padding:1px 5p
 
 <section class="section" id="section-nps">
   <div class="section-controls">
-    <div class="section-bar" id="nps-banner">NPS &amp; CSAT</div>
+    <div class="section-bar section-bar-main" id="nps-banner">NPS &amp; CSAT</div>
     <div class="controls-right">
       <select class="v4-select" id="npscx-month-select"></select>
       <select class="v4-select" id="npscx-squad-select"><option value="all">Todos os squads</option></select>
@@ -483,7 +487,7 @@ code{background:var(--surface-alt);border:1px solid var(--border);padding:1px 5p
 
 <section class="section" id="section-renovacao">
   <div class="section-controls">
-    <div class="section-bar">Renovação de Contratos</div>
+    <div class="section-bar section-bar-main">Renovação de Contratos</div>
     <div class="controls-right">
       <select class="v4-select" id="renovacao-month-select"></select>
     </div>
