@@ -679,12 +679,14 @@ const MOTIVO_COLOR = {'Qualidade da Operação':'#0891B2','Financeiro':'#DB2777'
 const MONTHS = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','2026-07','2026-08','2026-09'];
 const MONTH_LABEL = {'2026-01':'Janeiro','2026-02':'Fevereiro','2026-03':'Março','2026-04':'Abril','2026-05':'Maio','2026-06':'Junho','2026-07':'Julho','2026-08':'Agosto','2026-09':'Setembro','2026-10':'Outubro','2026-11':'Novembro','2026-12':'Dezembro'};
 const MONTH_SHORT = {'2026-01':'Jan','2026-02':'Fev','2026-03':'Mar','2026-04':'Abr','2026-05':'Mai','2026-06':'Jun','2026-07':'Jul','2026-08':'Ago','2026-09':'Set','2026-10':'Out','2026-11':'Nov','2026-12':'Dez'};
-const CHURN_MONTHS = [...MONTHS, '2026-10'];
-// Help Flag e NPS/CSAT ganharam outubro (MTD) nesta rodada — usam essa lista
+// Revenue Churn ganhou Novembro nesta rodada (19/10) — lista própria, separada de
+// MONTHS_INCL_OCT (Help Flag/NPS), que fica só até Outubro de propósito (não foi pedido pra elas).
+const CHURN_MONTHS = [...MONTHS, '2026-10', '2026-11'];
+// Help Flag e NPS/CSAT ganharam outubro (MTD) numa rodada anterior — usam essa lista
 // em vez de MONTHS puro pra não mexer no "Geral" de Churn/Downsell/Renovação
-// (que continuam tratando outubro como mês parcial à parte, de propósito).
-const MONTHS_INCL_OCT = CHURN_MONTHS;
-function prevMonthKey(m){ if(m==='2026-10') return '2026-09'; const i = MONTHS.indexOf(m); return i>0 ? MONTHS[i-1] : null; }
+// (que continuam tratando outubro/novembro como meses parciais à parte, de propósito).
+const MONTHS_INCL_OCT = [...MONTHS, '2026-10'];
+function prevMonthKey(m){ if(m==='2026-11') return '2026-10'; if(m==='2026-10') return '2026-09'; const i = MONTHS.indexOf(m); return i>0 ? MONTHS[i-1] : null; }
 function nextMonthKey(m){ const [y,mo] = m.split('-').map(Number); return new Date(Date.UTC(y,mo,1)).toISOString().slice(0,7); }
 function monthOptionsHTML(){ return `<option value="all">Geral (Jan–Out)</option>` + MONTHS_INCL_OCT.map(m=>`<option value="${m}">${MONTH_LABEL[m]}${m==='2026-10'?' (MTD)':''}</option>`).join(''); }
 function churnMonthOptionsHTML(){ return `<option value="all">Geral (Jan–Out)</option>` + CHURN_MONTHS.map(m=>`<option value="${m}">${MONTH_LABEL[m]}${m==='2026-10'?' (MTD)':''}</option>`).join(''); }
@@ -821,7 +823,7 @@ function buildCoordDrilldown(opts){
 let churnMonth = 'all';
 let churnSquadSel = 'all';
 
-function scopeLabel(month, includeOct){ return month==='all' ? (includeOct?'Geral (Jan–Out/2026)':'Geral (Jan–Set/2026)') : MONTH_LABEL[month]+'/2026'+(month==='2026-10'?' (MTD, até 28/09)':''); }
+function scopeLabel(month, includeOct){ return month==='all' ? (includeOct?'Geral (Jan–Nov/2026)':'Geral (Jan–Set/2026)') : MONTH_LABEL[month]+'/2026'+(month==='2026-10'?' (MTD, até 28/09)':''); }
 
 function renderChurnSection(){
   const rows = churnRows(churnMonth, churnSquadSel);

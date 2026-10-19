@@ -322,6 +322,18 @@ setTimeout(()=>{
   assert(doc.getElementById('churn-scope-note').textContent.includes('parcial'), 'churn scope note flags Outubro as partial (Previsão only)');
   fireChange('churn-month-select', 'all');
 
+  // --- TEST: Revenue Churn month selector includes Novembro (19/10) — Help Flag/NPS month
+  // selects must NOT pick this up too, since Novembro was requested for Revenue Churn only ---
+  assert(churnMonthOpts.includes('2026-11'), 'churn month select includes Novembro/2026');
+  fireChange('churn-month-select', '2026-11');
+  const novCombinedHTML = doc.getElementById('kpi-churn-combined').innerHTML;
+  assert(!novCombinedHTML.includes('undefined') && !novCombinedHTML.includes('NaN'), 'no undefined/NaN when Novembro selected in Revenue Churn');
+  fireChange('churn-month-select', 'all');
+  const hfMonthOpts = Array.from(doc.getElementById('hf-month-select').options).map(o=>o.value);
+  assert(!hfMonthOpts.includes('2026-11'), 'Help Flag month select does NOT get Novembro (out of scope for this request)');
+  const npscxMonthOpts = Array.from(doc.getElementById('npscx-month-select').options).map(o=>o.value);
+  assert(!npscxMonthOpts.includes('2026-11'), 'NPS/CSAT month select does NOT get Novembro (out of scope for this request)');
+
   // --- TEST: Renovação section built (28/09) using cockpit_entradas_saidas_renovacoes_query data ---
   const renovSection = doc.getElementById('section-renovacao');
   assert(!!renovSection, 'renovacao section exists');
