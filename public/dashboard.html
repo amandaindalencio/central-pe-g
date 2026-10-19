@@ -870,8 +870,22 @@ function renderChurnSection(){
   const squadsToShow = churnSquadSel==='all' ? ACTIVE_SQUADS : [churnSquadSel];
 
   if(churnComponents.churn){
+  // % Churn do mês = valor de Revenue Churn do mês / MRR total ativo (Executar) — mesma carteira já
+  // trazida pela sincronização de Previsão (RAW.activeMrrTotal, soma do fee de todo projeto Executar
+  // ativo hoje). Métrica é mensal por natureza (compara um mês de churn contra a base atual de MRR),
+  // então só calcula valor quando um mês específico está selecionado — em "Geral" (soma de vários
+  // meses) dividir pela mesma base atual distorceria o número.
+  const mrrTotal = RAW.activeMrrTotal;
+  const churnPct = (churnMonth!=='all' && mrrTotal) ? (cur.valor/mrrTotal*100) : null;
+  const churnPctPrev = (churnMonth!=='all' && prevMonth && mrrTotal && prev) ? (prev.valor/mrrTotal*100) : null;
+  const dChurnPct = deltaKpi(churnPct, churnPctPrev, false, true);
   document.getElementById('kpi-churn').innerHTML = [
     {label:'Revenue Churn',value:fmtBRL(cur.valor),sub:cur.qty+' clientes'+(prev?` (${MONTH_SHORT[prevMonth]}: ${fmtBRL(prev.valor)})`:''),delta:dValor.delta+(dValor.delta?' vs mês anterior':''),dir:dValor.dir,color:'red'},
+    {label:'% Churn do mês',value:churnPct!=null?fmtPct(churnPct):'—',
+      sub:churnMonth==='all' ? 'métrica mensal — selecione um mês específico'
+        : mrrTotal ? `${fmtBRL(cur.valor)} sobre ${fmtBRL(mrrTotal)} de MRR ativo (Executar)`
+        : 'aguardando sincronização da Previsão (MRR ativo)',
+      delta: dChurnPct.delta+(dChurnPct.delta?' vs mês anterior':''), dir:dChurnPct.dir, color:'red'},
     {label:'Clientes',value:fmtNum(cur.qty),sub:prev?`${prev.qty} no mês anterior`:'no recorte selecionado',delta:dQty.delta+(dQty.delta?' vs mês anterior':''),dir:dQty.dir},
     {label:'Ticket médio',value:cur.qty?fmtBRL(cur.valor/cur.qty):'—',sub:scopeLabel(churnMonth, true),color:'orange'},
     {label:'Motivo preenchido',value:cur.qty?fmtPct(100-(naoInformadoQty/cur.qty*100)):'—',sub:'dos registros do recorte',color:'orange'},
@@ -1904,9 +1918,13 @@ const SYNC_SERVICES = [
       RAW.forecastIncomplete = data.forecastIncomplete;
       RAW.previsaoRiskPool = data.previsaoRiskPool;
       RAW.recoveryItems = data.recoveryItems;
+      RAW.activeMrrTotal = data.activeMrrTotal;
       document.getElementById('previsao-month-select').innerHTML = previsaoMonthOptionsHTML();
       renderPrevisao(churnSquadSel);
       buildRecoveryTable(churnSquadSel);
+      // o card "% Churn do mês" vive na sessão de Revenue Churn mas depende do MRR ativo
+      // trazido por este sync — sem isso ele ficaria preso no "—" até alguém sincronizar Churn também.
+      if(churnComponents.churn) renderChurnSection();
       buildOverviewInsights();
     },
   },

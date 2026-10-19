@@ -17,6 +17,11 @@ ${fetchImpl}
 }
 
 function assert(cond, label){ console.log((cond?'PASS':'FAIL')+' - '+label); if(!cond) process.exitCode=1; }
+function fireChange(win, id, value){
+  const el = win.document.getElementById(id);
+  el.value = value;
+  el.dispatchEvent(new win.Event('change'));
+}
 
 // ---- Scenario 1: fetch not available / API unreachable ----
 (function scenarioNoFetch(){
@@ -131,6 +136,47 @@ window.fetch = async (url, opts) => {
     assert(doc.getElementById('previsao-table').innerHTML.includes('CLIENTE PREVISAO FAKE'), '[previsao-preseeded] previsao table re-renders with the synced data');
     assert(doc.getElementById('previsao-risk-table').innerHTML.includes('CLIENTE RISCO FAKE'), '[previsao-preseeded] risk pool table re-renders with the synced data');
     assert(doc.getElementById('recovery-table').innerHTML.includes('CLIENTE PREVISAO FAKE'), '[previsao-preseeded] recovery table re-renders with the synced data');
+  }, 400);
+})();
+
+// ---- Scenario 2d-bis: % Churn do mês card (19/10) — reads RAW.churnByMonth (synced by "churn") against
+// RAW.activeMrrTotal (synced by "previsao", carried over from fetchPrevisaoData's activeProjects with no
+// extra Cockpit call). Both services pre-populated together here since the card lives in Revenue Churn
+// but depends on data that only arrives via the Previsão sync. ----
+(function scenarioChurnPctOfMrr(){
+  const fetchImpl = `
+window.fetch = async (url, opts) => {
+  if (url === '/api/data/churn') {
+    return { ok:true, json: async () => ({
+      data: { payload: { '2026-01': [{name:'CLIENTE CHURN FAKE', documentId:'fakedoc1', lt:12, coord:'jefferson.vieira', squad:'Invictus', motivo:'Financeiro', churnDetail:'Não informado', valor:5000, data:'15/01'}] } },
+      status: { status:'ok', updatedAt: Date.now()-5400000, error:null }
+    }) };
+  }
+  if (url === '/api/data/previsao') {
+    return { ok:true, json: async () => ({
+      data: { payload: {
+        forecastItems: [], forecastIncomplete: [], previsaoRiskPool: [], recoveryItems: [],
+        activeMrrTotal: 100000
+      } },
+      status: { status:'ok', updatedAt: Date.now()-3600000, error:null }
+    }) };
+  }
+  return { ok:true, json: async () => ({ data:null, status:null }) };
+};`;
+  const dom = loadDom(fetchImpl);
+  const doc = dom.window.document;
+  setTimeout(()=>{
+    assert(dom.window.__errors.length===0, '[churn-pct-mrr] no JS errors on load');
+    // "Geral" (all months) by default — card shouldn't compute a misleading % against a single-month-shaped MRR base
+    const kpiAll = doc.getElementById('kpi-churn').innerHTML;
+    assert(kpiAll.includes('% Churn do mês'), '[churn-pct-mrr] new "% Churn do mês" card renders');
+    assert(kpiAll.includes('selecione um mês'), '[churn-pct-mrr] card shows guidance instead of a number when scope is "Geral"');
+
+    fireChange(dom.window, 'churn-month-select', '2026-01');
+    const kpiJan = doc.getElementById('kpi-churn').innerHTML;
+    // R$5.000 de churn sobre R$100.000 de MRR ativo = 5,0%
+    assert(kpiJan.includes('5,0%'), '[churn-pct-mrr] % Churn do mês = valor de churn do mês ÷ RAW.activeMrrTotal (5.000/100.000 = 5,0%)');
+    assert(kpiJan.includes('100.000') && kpiJan.includes('5.000'), '[churn-pct-mrr] sub-text shows both the churn value and the MRR base used');
   }, 400);
 })();
 

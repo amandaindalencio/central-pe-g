@@ -5,7 +5,7 @@ const TOOLRES = 'C:\\Users\\amand\\.claude\\projects\\c--Users-amand--claude\\43
 const activeProjects = JSON.parse(fs.readFileSync(TOOLRES + '\\mcp-cockpit-cockpit_query_table-1790857267732.txt', 'utf-8'));
 const previsao = JSON.parse(fs.readFileSync(TOOLRES + '\\mcp-cockpit-cockpit_entradas_saidas_previsao_query-1790856443940.txt', 'utf-8'));
 
-const { forecastItems, forecastIncomplete, previsaoRiskPool, recoveryItems } = transformPrevisao({ activeProjects, previsao });
+const { forecastItems, forecastIncomplete, previsaoRiskPool, recoveryItems, activeMrrTotal } = transformPrevisao({ activeProjects, previsao });
 
 const sumFee = forecastItems.reduce((a, r) => a + r.fee, 0);
 console.log('forecastItems:', forecastItems.length, '(expected 6)');
@@ -17,8 +17,15 @@ console.log('recoveryItems:', recoveryItems.length, '(expected 6, same as foreca
 const kce = forecastItems.find((f) => f.name.includes('KCE'));
 console.log('KCE projectedMonth:', kce && kce.projectedMonth, '(expected 2026-08)');
 
+// % Churn do mês (19/10): activeMrrTotal = soma de fee de TODA a carteira ativa Executar já trazida
+// por este mesmo tool-result (não só quem tem churnRequestDate) — recomputa independentemente aqui
+// pra conferir que transformPrevisao não dropou nem duplicou nenhum projeto.
+const expectedMrrTotal = (activeProjects.data || []).reduce((a, p) => a + (p.fee || 0), 0);
+console.log('activeMrrTotal:', activeMrrTotal, '(expected', expectedMrrTotal, '— recomputado direto do mesmo tool-result)');
+
 const ok = forecastItems.length === 6 && sumFee === 41116 && forecastIncomplete.length === 0
-  && previsaoRiskPool.length === 85 && kce && kce.projectedMonth === '2026-08';
+  && previsaoRiskPool.length === 85 && kce && kce.projectedMonth === '2026-08'
+  && activeMrrTotal === expectedMrrTotal && activeMrrTotal > 0;
 
 if (!ok) {
   console.log('MISMATCH — transformPrevisao output drifted from the known-good value');
