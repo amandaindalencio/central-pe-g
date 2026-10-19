@@ -652,6 +652,25 @@ const ACTIVE_SQUADS = ['Invictus','Billions','Exclusive'];
 // oferecer governança/ação a quem não coordena mais ninguém (ex-coordenadores que só aparecem no
 // histórico de HS por terem coordenado um cliente que já churnou).
 const ACTIVE_COORDS = ['Guilhermeduarte.coord','gustavosmarito.coord','gustavosmarito.tech','jefferson.vieira','leonardopereira','lucas_isaque','melissa.pessoa','nayaraventura','thaina.gomes','thiago.almeida','ueliton.pereira','vitor.neres'];
+// Squad de cada coordenador, derivado dos próprios dados de Help Flag (cada linha carteira já traz coord+squad) —
+// usa a squad mais frequente entre os clientes do coordenador em todos os meses sincronizados, caso ele tenha
+// atendido mais de uma squad ao longo do histórico.
+function coordSquadMap(){
+  const counts = {};
+  MONTHS_INCL_OCT.forEach(m=>{
+    (RAW.helpFlagByMonth[m]||[]).forEach(r=>{
+      if(!r.coord || !r.squad) return;
+      counts[r.coord] = counts[r.coord] || {};
+      counts[r.coord][r.squad] = (counts[r.coord][r.squad]||0) + 1;
+    });
+  });
+  const map = {};
+  Object.keys(counts).forEach(c=>{
+    const bySquad = counts[c];
+    map[c] = Object.keys(bySquad).sort((a,b)=>bySquad[b]-bySquad[a])[0];
+  });
+  return map;
+}
 const MOTIVO_COLOR = {'Qualidade da Operação':'#0891B2','Financeiro':'#DB2777','Interno Cliente':'#2563EB','Produto Inadequado':'#D97706','Cliente Não Ativado':'#EA580C','Falha na Venda':'#16A34A','Não informado':'#78716C','Demissão Cliente':'#9333EA'};
 const MONTHS = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','2026-07','2026-08','2026-09'];
 const MONTH_LABEL = {'2026-01':'Janeiro','2026-02':'Fevereiro','2026-03':'Março','2026-04':'Abril','2026-05':'Maio','2026-06':'Junho','2026-07':'Julho','2026-08':'Agosto','2026-09':'Setembro','2026-10':'Outubro','2026-11':'Novembro','2026-12':'Dezembro'};
@@ -1139,14 +1158,16 @@ function buildHfWeeklyTrendTable(){
   const trend = RAW.hfWeeklyTrend;
   if(!trend) return;
   const weeks = trend.weeks;
+  const csMap = coordSquadMap();
   const coords = Object.keys(trend.byCoord).sort((a,b)=>formatName(a).localeCompare(formatName(b)));
   const rows = coords.map(c=>{
-    const row = {coord:c};
+    const row = {coord:c, squad:csMap[c]||'Sem squad'};
     trend.byCoord[c].forEach((w,i)=>{ row['w'+i] = w; });
     return row;
   });
   const cols = [
     {label:'Coordenação', render:r=>formatName(r.coord), sortVal:r=>formatName(r.coord)},
+    {label:'Squad', render:r=>sqDotHTML(r.squad), sortVal:r=>r.squad},
     ...weeks.map((w,i)=>({
       label: w.slice(8,10)+'/'+w.slice(5,7),
       num:true, center:true,
@@ -1155,7 +1176,9 @@ function buildHfWeeklyTrendTable(){
     }))
   ];
   const tableId = 'hf-weekly-trend';
-  _sortStates[tableId] = _sortStates[tableId] || {idx:0,dir:1};
+  // default: agrupado por Squad (coluna 1) — Coordenação (já ordenada por nome) permanece como
+  // desempate estável, então dentro de cada squad os coordenadores ficam em ordem alfabética.
+  _sortStates[tableId] = _sortStates[tableId] || {idx:1,dir:1};
   _sortRedraw[tableId] = buildHfWeeklyTrendTable;
   const sorted = sortRowsBy(rows, cols, _sortStates[tableId]);
   const c = document.getElementById(tableId);

@@ -201,8 +201,19 @@ setTimeout(()=>{
     const bodyRows = el.querySelectorAll('tbody tr');
     assert(bodyRows.length === 12, 'hf weekly trend table has one row per active coordinator (12)');
     const headers = el.querySelectorAll('thead th');
-    assert(headers.length === 13, 'hf weekly trend table has coord column + 12 week columns');
+    assert(headers.length === 14, 'hf weekly trend table has coord column + squad column + 12 week columns');
     assert(!el.innerHTML.includes('undefined') && !el.innerHTML.includes('NaN'), 'no undefined/NaN in hf weekly trend table');
+    ['Invictus','Billions','Exclusive'].forEach(sq=>{
+      assert(el.innerHTML.includes(sq), `hf weekly trend table shows ${sq} in the new Squad column`);
+    });
+    // default sort is grouped by Squad (ascending) so equal values should be contiguous, not interleaved
+    const squadColVals = Array.from(bodyRows).map(r=>r.children[1].textContent.trim());
+    const seenSquads = new Set();
+    let groupedOk = true, prev = null;
+    squadColVals.forEach(v=>{
+      if(v!==prev){ if(seenSquads.has(v)) groupedOk = false; seenSquads.add(v); prev = v; }
+    });
+    assert(groupedOk, 'hf weekly trend table defaults to grouped-by-squad order (no interleaving)');
     const firstCoordBefore = bodyRows[0].children[0].textContent.trim();
     const lastWeekTh = Array.from(headers).pop();
     lastWeekTh.click();
