@@ -29,6 +29,20 @@ const SERVICES = {
   helpflag: { fetch: fetchHelpFlagHistory, transform: transformHelpFlag, label: 'Help Flag' },
 };
 
+// Timeout do protocolo MCP (código -32001) usa o mesmo teto de 60s da própria função da Vercel (ver
+// nota de maxDuration acima) — uma chamada que fica bem na borda desse limite falha de forma
+// intermitente, sem relação com o dado em si. Reportado 02/11 (Renovação: "MCP error -32001: Request
+// timed out"). Não há mais orçamento de tempo pra esperar DENTRO desta mesma invocação (os dois tetos
+// já são o máximo possível), então o único jeito real de dar uma segunda chance é chamar fetch() de
+// novo — mas isso certamente estoura os 60s totais da função. Por isso o retry físico mora só no
+// botão "Sincronizar" do dashboard (cada clique é uma invocação nova, com orçamento de 60s do zero);
+// aqui, no cron, só deixamos a mensagem de erro clara o bastante pra reconhecer esse caso específico
+// quando alguém olhar o status — o próprio cron do dia seguinte já é, na prática, o retry.
+function isTimeoutError(e) {
+  const msg = String((e && e.message) || e || '');
+  return /timed out|-32001/i.test(msg);
+}
+
 async function runService(service) {
   const svc = SERVICES[service];
   if (!svc) return { status: 404, body: { error: 'unknown service: ' + service } };
@@ -44,7 +58,10 @@ async function runService(service) {
     return { status: 200, body: { ok: true, updatedAt: now } };
   } catch (e) {
     const now = Date.now();
-    const message = String((e && e.message) || e);
+    const rawMessage = String((e && e.message) || e);
+    const message = isTimeoutError(e)
+      ? `${rawMessage} — timeout intermitente no gateway MCP (não é problema com o dado em si). Tente sincronizar de novo pelo botão (cada clique já tenta 2x sozinho); se veio do cron automático, o próximo cron já tenta de novo.`
+      : rawMessage;
     await setDoc(`sync:status:${service}`, { status: 'error', updatedAt: now, error: { message } });
     return { status: 500, body: { ok: false, error: message } };
   }

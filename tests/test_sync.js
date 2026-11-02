@@ -276,8 +276,77 @@ window.fetch = async (url, opts) => {
       assert(pill.classList.contains('error'), '[sync-error] downsell pill shows error status');
       const errBox = doc.getElementById('sync-error-box').textContent;
       assert(errBox.includes('token inválido'), '[sync-error] error box surfaces the real backend error message, not a generic one');
+    }, 100);
+  }, 400);
+})();
+
+// ---- Scenario 4: POST /api/sync/renovacao times out (MCP error -32001) once, then succeeds on
+// retry — reported 02/11 ("Renovação: MCP error -32001: Request timed out"). runSync() now retries
+// once automatically on this specific class of error (the MCP client's own 60s timeout races Vercel's
+// own 60s function ceiling, so a call near that edge fails intermittently — a fresh invocation via
+// retry gets a full new 60s budget, a real second chance, not just a repeat of the same timeout). ----
+(function scenarioSyncTimeoutRetrySucceeds(){
+  const fetchImpl = `
+window.__renovacaoAttempts = 0;
+window.fetch = async (url, opts) => {
+  if (opts && opts.method === 'POST' && url === '/api/sync/renovacao') {
+    window.__renovacaoAttempts++;
+    if (window.__renovacaoAttempts === 1) {
+      return { ok:false, json: async () => ({ ok:false, error:'MCP error -32001: Request timed out' }) };
+    }
+    return { ok:true, json: async () => ({ ok:true, updatedAt: Date.now() }) };
+  }
+  if (url === '/api/data/renovacao') {
+    return { ok:true, json: async () => ({ data: { payload: [] }, status: { status:'ok', updatedAt: Date.now(), error:null } }) };
+  }
+  return { ok:true, json: async () => ({ data:null, status:null }) };
+};`;
+  const dom = loadDom(fetchImpl);
+  const doc = dom.window.document;
+  setTimeout(async ()=>{
+    await dom.window.runSync(['renovacao']);
+    setTimeout(()=>{
+      assert(dom.window.__errors.length===0, '[sync-timeout-retry] no JS errors across a retried sync');
+      assert(dom.window.__renovacaoAttempts===2, '[sync-timeout-retry] runSync actually retried once after the -32001 timeout (2 POST attempts)');
+      const pill = doc.getElementById('sync-pill-renovacao');
+      assert(pill.classList.contains('ok'), '[sync-timeout-retry] pill ends up "ok" after the retry succeeds, not stuck on "error"');
+      const errBox = doc.getElementById('sync-error-box').textContent;
+      assert(!errBox.includes('-32001'), '[sync-timeout-retry] no error surfaced to the user once the retry succeeded');
+    }, 100);
+  }, 400);
+})();
+
+// ---- Scenario 5: both attempts time out — retry doesn't mask a real, persistent failure ----
+(function scenarioSyncTimeoutRetryStillFails(){
+  const fetchImpl = `
+window.__renovacaoAttempts = 0;
+window.fetch = async (url, opts) => {
+  if (opts && opts.method === 'POST' && url === '/api/sync/renovacao') {
+    window.__renovacaoAttempts++;
+    return { ok:false, json: async () => ({ ok:false, error:'MCP error -32001: Request timed out' }) };
+  }
+  // Pre-seed renovacao as freshly synced so initSync()'s own stale-check (which runs on page load,
+  // independent of the explicit runSync() call below) does NOT ALSO auto-trigger a competing sync for
+  // renovacao — without this, two independent runSync(['renovacao']) calls race each other and each
+  // retries on its own, making the attempt count non-deterministic instead of exactly 2.
+  if (url === '/api/data/renovacao') {
+    return { ok:true, json: async () => ({ data: { payload: [] }, status: { status:'ok', updatedAt: Date.now(), error:null } }) };
+  }
+  return { ok:true, json: async () => ({ data:null, status:null }) };
+};`;
+  const dom = loadDom(fetchImpl);
+  const doc = dom.window.document;
+  setTimeout(async ()=>{
+    await dom.window.runSync(['renovacao']);
+    setTimeout(()=>{
+      assert(dom.window.__errors.length===0, '[sync-timeout-retry-fail] no JS errors when both attempts fail');
+      assert(dom.window.__renovacaoAttempts===2, '[sync-timeout-retry-fail] still only retries once (2 attempts total), not an infinite loop');
+      const pill = doc.getElementById('sync-pill-renovacao');
+      assert(pill.classList.contains('error'), '[sync-timeout-retry-fail] pill correctly shows "error" when the retry also fails');
+      const errBox = doc.getElementById('sync-error-box').textContent;
+      assert(errBox.includes('-32001'), '[sync-timeout-retry-fail] real, persistent error still surfaces to the user after the retry is exhausted');
       console.log('--- done ---');
       process.exit(process.exitCode||0);
     }, 100);
-  }, 400);
+  }, 400); // await runSync() below already blocks through the full ~2000ms retry backoff itself
 })();

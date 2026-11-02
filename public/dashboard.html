@@ -1986,15 +1986,35 @@ function syncClearError(id){
   if(existing) existing.remove();
 }
 
+// Erro de timeout (código -32001 do protocolo MCP, ou "timed out" na mensagem) é retryable por
+// natureza: o cliente MCP usa o mesmo teto de 60s da função da Vercel (DEFAULT_REQUEST_TIMEOUT_MSEC
+// do SDK), então uma chamada que fica bem na borda desse limite falha de forma intermitente — às
+// vezes passa, às vezes não, sem relação com o dado em si. Reportado 02/11 (Renovação: "MCP error
+// -32001: Request timed out"). Como os dois tetos (cliente MCP e Vercel) já são o máximo possível
+// aqui (ver nota de maxDuration no route.js), a única alavanca real do nosso lado é tentar de novo —
+// uma nova invocação da função ganha um orçamento de 60s inteiro novo, então uma chamada que passou
+// perto do limite tem uma segunda chance real, não só repetir o mesmo timeout.
+function isRetryableSyncError(msg){ return /timed out|-32001/i.test(msg||''); }
+async function runSyncOnce(svc){
+  const res = await fetch('/api/sync/'+svc.id, {method:'POST'});
+  const body = await res.json().catch(()=>({}));
+  if(!res.ok || body.ok===false) throw new Error(body.error || ('HTTP '+res.status));
+  return body.updatedAt || Date.now();
+}
 async function runSync(ids){
   for(const svc of SYNC_SERVICES.filter(s=>ids.includes(s.id))){
     syncSetPillUI(svc.id, 'running', 'sincronizando…');
     syncClearError(svc.id);
     try{
-      const res = await fetch('/api/sync/'+svc.id, {method:'POST'});
-      const body = await res.json().catch(()=>({}));
-      if(!res.ok || body.ok===false) throw new Error(body.error || ('HTTP '+res.status));
-      const now = body.updatedAt || Date.now();
+      let now;
+      try{
+        now = await runSyncOnce(svc);
+      }catch(e){
+        if(!isRetryableSyncError(e.message)) throw e;
+        syncSetPillUI(svc.id, 'running', 'tentando de novo…');
+        await new Promise(r=>setTimeout(r, 2000));
+        now = await runSyncOnce(svc);
+      }
       await syncRefreshFromApi(svc);
       syncSetPillUI(svc.id, 'ok', syncRelativeTime(now));
     }catch(e){
