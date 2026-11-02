@@ -679,17 +679,22 @@ const MOTIVO_COLOR = {'Qualidade da Operação':'#0891B2','Financeiro':'#DB2777'
 const MONTHS = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','2026-07','2026-08','2026-09'];
 const MONTH_LABEL = {'2026-01':'Janeiro','2026-02':'Fevereiro','2026-03':'Março','2026-04':'Abril','2026-05':'Maio','2026-06':'Junho','2026-07':'Julho','2026-08':'Agosto','2026-09':'Setembro','2026-10':'Outubro','2026-11':'Novembro','2026-12':'Dezembro'};
 const MONTH_SHORT = {'2026-01':'Jan','2026-02':'Fev','2026-03':'Mar','2026-04':'Abr','2026-05':'Mai','2026-06':'Jun','2026-07':'Jul','2026-08':'Ago','2026-09':'Set','2026-10':'Out','2026-11':'Nov','2026-12':'Dez'};
-// Revenue Churn ganhou Novembro nesta rodada (19/10) — lista própria, separada de
+// Revenue Churn ganhou Novembro (19/10) e Dezembro (02/11) — lista própria, separada de
 // MONTHS_INCL_OCT (Help Flag/NPS), que fica só até Outubro de propósito (não foi pedido pra elas).
-const CHURN_MONTHS = [...MONTHS, '2026-10', '2026-11'];
+const CHURN_MONTHS = [...MONTHS, '2026-10', '2026-11', '2026-12'];
 // Help Flag e NPS/CSAT ganharam outubro (MTD) numa rodada anterior — usam essa lista
 // em vez de MONTHS puro pra não mexer no "Geral" de Churn/Downsell/Renovação
-// (que continuam tratando outubro/novembro como meses parciais à parte, de propósito).
+// (que continuam tratando outubro/novembro/dezembro como meses parciais à parte, de propósito).
 const MONTHS_INCL_OCT = [...MONTHS, '2026-10'];
-function prevMonthKey(m){ if(m==='2026-11') return '2026-10'; if(m==='2026-10') return '2026-09'; const i = MONTHS.indexOf(m); return i>0 ? MONTHS[i-1] : null; }
+// Mês vigente calculado a cada carregamento (não mais fixo em Outubro) — assim o rótulo "(MTD)" e o
+// texto de mês parcial do Revenue Churn acompanham o calendário sozinhos daqui pra frente, sem precisar
+// de um ajuste manual toda virada de mês (pedido explícito em 02/11: "para anteciparmos os dados").
+const TODAY_ISO = new Date().toISOString().slice(0,10);
+const CURRENT_MONTH_KEY = TODAY_ISO.slice(0,7);
+function prevMonthKey(m){ if(m==='2026-12') return '2026-11'; if(m==='2026-11') return '2026-10'; if(m==='2026-10') return '2026-09'; const i = MONTHS.indexOf(m); return i>0 ? MONTHS[i-1] : null; }
 function nextMonthKey(m){ const [y,mo] = m.split('-').map(Number); return new Date(Date.UTC(y,mo,1)).toISOString().slice(0,7); }
 function monthOptionsHTML(){ return `<option value="all">Geral (Jan–Out)</option>` + MONTHS_INCL_OCT.map(m=>`<option value="${m}">${MONTH_LABEL[m]}${m==='2026-10'?' (MTD)':''}</option>`).join(''); }
-function churnMonthOptionsHTML(){ return `<option value="all">Geral (Jan–Out)</option>` + CHURN_MONTHS.map(m=>`<option value="${m}">${MONTH_LABEL[m]}${m==='2026-10'?' (MTD)':''}</option>`).join(''); }
+function churnMonthOptionsHTML(){ return `<option value="all">Geral (Jan–Out)</option>` + CHURN_MONTHS.map(m=>`<option value="${m}">${MONTH_LABEL[m]}${m===CURRENT_MONTH_KEY?' (MTD)':''}</option>`).join(''); }
 
 /* ---- churn / downsell row accessors ---- */
 function churnRows(month, squad){
@@ -823,7 +828,7 @@ function buildCoordDrilldown(opts){
 let churnMonth = 'all';
 let churnSquadSel = 'all';
 
-function scopeLabel(month, includeOct){ return month==='all' ? (includeOct?'Geral (Jan–Nov/2026)':'Geral (Jan–Set/2026)') : MONTH_LABEL[month]+'/2026'+(month==='2026-10'?' (MTD, até 28/09)':''); }
+function scopeLabel(month, includeOct){ return month==='all' ? (includeOct?'Geral (Jan–Nov/2026)':'Geral (Jan–Set/2026)') : MONTH_LABEL[month]+'/2026'+(month===CURRENT_MONTH_KEY?` (MTD, até ${TODAY_ISO.slice(8,10)}/${TODAY_ISO.slice(5,7)})`:''); }
 
 function renderChurnSection(){
   const rows = churnRows(churnMonth, churnSquadSel);
@@ -831,12 +836,11 @@ function renderChurnSection(){
   const prevRows = prevMonth ? churnRows(prevMonth, churnSquadSel) : null;
 
   document.getElementById('churn-banner').textContent = 'Revenue Churn — ' + scopeLabel(churnMonth, true) + (churnSquadSel!=='all' ? ' · '+churnSquadSel : '');
-  document.getElementById('churn-scope-note').textContent = (churnMonth==='2026-10'
-    ? `Outubro/2026 é mês parcial (MTD, até 28/09) — só 2 dias decorridos; Churn realizado aqui é o que já ocorreu no mês, não o mês fechado. Comparando com Setembro/2026. Só categoria Executar.`
+  document.getElementById('churn-scope-note').textContent = (churnMonth===CURRENT_MONTH_KEY
+    ? `${MONTH_LABEL[churnMonth]}/2026 é mês parcial (MTD, até ${TODAY_ISO.slice(8,10)}/${TODAY_ISO.slice(5,7)}) — só ${+TODAY_ISO.slice(8,10)} dia(s) decorrido(s); Churn realizado aqui é o que já ocorreu no mês, não o mês fechado. Comparando com ${MONTH_LABEL[prevMonth]}/2026. Só categoria Executar.`
     : prevMonth
     ? `Só categoria Executar (exclui Diagnóstico/Monetização/Saber). Comparando com ${MONTH_LABEL[prevMonth]}/2026. Valor de saída = fee do projeto na data do churn.`
-    : `Só categoria Executar (exclui Diagnóstico/Monetização/Saber). Visão consolidada — soma de todos os meses coletados. Sem comparativo (MoM só se aplica a um mês específico).`)
-    + ' Dados atualizados em 28/09/2026.';
+    : `Só categoria Executar (exclui Diagnóstico/Monetização/Saber). Visão consolidada — soma de todos os meses coletados. Sem comparativo (MoM só se aplica a um mês específico).`);
 
   const cur = {qty: rows.length, valor: sumBy(rows, r=>r.valor)};
   const prev = prevRows ? {qty: prevRows.length, valor: sumBy(prevRows, r=>r.valor)} : null;

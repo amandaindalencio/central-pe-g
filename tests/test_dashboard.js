@@ -313,26 +313,48 @@ setTimeout(()=>{
     assert(churnDesc.every((v,i)=>i===0||v<=churnDesc[i-1]), 'churn-table (paginate-based) sorts descending on Valor saída click');
   })();
 
-  // --- TEST: Revenue Churn month selector includes Outubro with partial (Previsão-only) data (item 1) ---
+  // --- TEST: Revenue Churn month selector includes Outubro/Novembro/Dezembro (item 1, extended 02/11) ---
   const churnMonthOpts = Array.from(doc.getElementById('churn-month-select').options).map(o=>o.value);
   assert(churnMonthOpts.includes('2026-10'), 'churn month select includes Outubro/2026');
+  assert(churnMonthOpts.includes('2026-11'), 'churn month select includes Novembro/2026');
+  assert(churnMonthOpts.includes('2026-12'), 'churn month select includes Dezembro/2026 (added 02/11 to anticipate data)');
   fireChange('churn-month-select', '2026-10');
   const octCombinedHTML = doc.getElementById('kpi-churn-combined').innerHTML;
   assert(!octCombinedHTML.includes('undefined') && !octCombinedHTML.includes('NaN'), 'no undefined/NaN when Outubro selected in Revenue Churn');
-  assert(doc.getElementById('churn-scope-note').textContent.includes('parcial'), 'churn scope note flags Outubro as partial (Previsão only)');
+  fireChange('churn-month-select', '2026-12');
+  const decCombinedHTML = doc.getElementById('kpi-churn-combined').innerHTML;
+  assert(!decCombinedHTML.includes('undefined') && !decCombinedHTML.includes('NaN'), 'no undefined/NaN when Dezembro selected in Revenue Churn');
   fireChange('churn-month-select', 'all');
 
-  // --- TEST: Revenue Churn month selector includes Novembro (19/10) — Help Flag/NPS month
-  // selects must NOT pick this up too, since Novembro was requested for Revenue Churn only ---
-  assert(churnMonthOpts.includes('2026-11'), 'churn month select includes Novembro/2026');
-  fireChange('churn-month-select', '2026-11');
-  const novCombinedHTML = doc.getElementById('kpi-churn-combined').innerHTML;
-  assert(!novCombinedHTML.includes('undefined') && !novCombinedHTML.includes('NaN'), 'no undefined/NaN when Novembro selected in Revenue Churn');
-  fireChange('churn-month-select', 'all');
+  // --- TEST: "mês vigente" (current month) MTD flag is computed from the real clock, not hardcoded to
+  // Outubro anymore (02/11 fix) — whichever CHURN_MONTHS entry matches today's real month gets "(MTD)"
+  // in the dropdown and "parcial" in the scope note; the one right before it does not. ---
+  (function checkCurrentMonthIsDynamic(){
+    const currentMonthKey = new Date().toISOString().slice(0,7); // same formula dashboard.html uses for CURRENT_MONTH_KEY
+    if(!churnMonthOpts.includes(currentMonthKey)){
+      console.log('SKIP - current-month-is-dynamic check (today is outside the 2026 Jan–Dez range this dashboard hardcodes)');
+      return;
+    }
+    const mtdOption = Array.from(doc.getElementById('churn-month-select').options).find(o=>o.value===currentMonthKey);
+    assert(mtdOption.textContent.includes('MTD'), `dropdown tags the real current month (${currentMonthKey}) as (MTD), not a hardcoded one`);
+    fireChange('churn-month-select', currentMonthKey);
+    assert(doc.getElementById('churn-scope-note').textContent.includes('parcial'), `churn scope note flags the real current month (${currentMonthKey}) as partial`);
+    const closedMonth = window.prevMonthKey(currentMonthKey);
+    if(closedMonth){
+      fireChange('churn-month-select', closedMonth);
+      assert(!doc.getElementById('churn-scope-note').textContent.includes('parcial'), `churn scope note does NOT flag the already-closed previous month (${closedMonth}) as partial`);
+    }
+    fireChange('churn-month-select', 'all');
+  })();
+
+  // --- TEST: Help Flag/NPS month selects must NOT pick up Novembro/Dezembro — those were requested for
+  // Revenue Churn only (19/10, 02/11) ---
   const hfMonthOpts = Array.from(doc.getElementById('hf-month-select').options).map(o=>o.value);
   assert(!hfMonthOpts.includes('2026-11'), 'Help Flag month select does NOT get Novembro (out of scope for this request)');
+  assert(!hfMonthOpts.includes('2026-12'), 'Help Flag month select does NOT get Dezembro (out of scope for this request)');
   const npscxMonthOpts = Array.from(doc.getElementById('npscx-month-select').options).map(o=>o.value);
   assert(!npscxMonthOpts.includes('2026-11'), 'NPS/CSAT month select does NOT get Novembro (out of scope for this request)');
+  assert(!npscxMonthOpts.includes('2026-12'), 'NPS/CSAT month select does NOT get Dezembro (out of scope for this request)');
 
   // --- TEST: Renovação section built (28/09) using cockpit_entradas_saidas_renovacoes_query data ---
   const renovSection = doc.getElementById('section-renovacao');
