@@ -1986,15 +1986,19 @@ function syncClearError(id){
   if(existing) existing.remove();
 }
 
-// Erro de timeout (código -32001 do protocolo MCP, ou "timed out" na mensagem) é retryable por
-// natureza: o cliente MCP usa o mesmo teto de 60s da função da Vercel (DEFAULT_REQUEST_TIMEOUT_MSEC
-// do SDK), então uma chamada que fica bem na borda desse limite falha de forma intermitente — às
-// vezes passa, às vezes não, sem relação com o dado em si. Reportado 02/11 (Renovação: "MCP error
-// -32001: Request timed out"). Como os dois tetos (cliente MCP e Vercel) já são o máximo possível
-// aqui (ver nota de maxDuration no route.js), a única alavanca real do nosso lado é tentar de novo —
-// uma nova invocação da função ganha um orçamento de 60s inteiro novo, então uma chamada que passou
-// perto do limite tem uma segunda chance real, não só repetir o mesmo timeout.
-function isRetryableSyncError(msg){ return /timed out|-32001/i.test(msg||''); }
+// Erro de timeout é retryable por natureza — duas formas conhecidas, ambas pela mesma causa raiz
+// (uma chamada ao Cockpit que fica perto do teto de 60s da função da Vercel):
+//  (a) "-32001"/"timed out" — o cliente MCP (DEFAULT_REQUEST_TIMEOUT_MSEC do SDK) corta a chamada
+//      sozinho e devolve um erro estruturado da nossa própria rota (reportado 02/11, Renovação).
+//  (b) "HTTP 50x" — a própria Vercel mata a função ANTES de qualquer JSON nosso voltar (reportado
+//      03/11, as 5 áreas de uma vez: Renovação/NPS & CSAT/Revenue Churn/Previsão/Help Flag) — nesse
+//      caso runSyncOnce() nunca recebe body.error, só o HTTP status puro.
+// Como os tetos envolvidos (cliente MCP e Vercel) já são o máximo possível aqui (ver nota de
+// maxDuration no route.js), a única alavanca real do nosso lado é tentar de novo — uma nova
+// invocação da função ganha um orçamento de 60s inteiro novo (e pode cair numa rota de rede
+// diferente até lá), então uma chamada que passou perto do limite tem uma segunda chance real, não
+// só repetir o mesmo timeout.
+function isRetryableSyncError(msg){ return /timed out|-32001|HTTP 50\d/i.test(msg||''); }
 async function runSyncOnce(svc){
   const res = await fetch('/api/sync/'+svc.id, {method:'POST'});
   const body = await res.json().catch(()=>({}));

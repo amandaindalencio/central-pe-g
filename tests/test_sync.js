@@ -345,8 +345,43 @@ window.fetch = async (url, opts) => {
       assert(pill.classList.contains('error'), '[sync-timeout-retry-fail] pill correctly shows "error" when the retry also fails');
       const errBox = doc.getElementById('sync-error-box').textContent;
       assert(errBox.includes('-32001'), '[sync-timeout-retry-fail] real, persistent error still surfaces to the user after the retry is exhausted');
+    }, 100);
+  }, 400); // await runSync() below already blocks through the full ~2000ms retry backoff itself
+})();
+
+// ---- Scenario 6: raw "HTTP 504" (Vercel platform kills the function before any of our own JSON
+// comes back — reported 03/11, all 5 services at once: Renovação/NPS & CSAT/Revenue Churn/Previsão/
+// Help Flag) must be retried too, same as the MCP-level -32001 — same root cause (a call near the
+// 60s ceiling), just surfacing without a JSON body this time. ----
+(function scenarioSyncHttp504Retried(){
+  const fetchImpl = `
+window.__churnAttempts = 0;
+window.fetch = async (url, opts) => {
+  if (opts && opts.method === 'POST' && url === '/api/sync/churn') {
+    window.__churnAttempts++;
+    if (window.__churnAttempts === 1) {
+      // Vercel's own 504 page, not JSON from our route — res.json() rejects, runSyncOnce falls
+      // back to "HTTP "+res.status with no body.error to read.
+      return { ok:false, status:504, json: async () => { throw new Error('Unexpected token < in JSON'); } };
+    }
+    return { ok:true, json: async () => ({ ok:true, updatedAt: Date.now() }) };
+  }
+  if (url === '/api/data/churn') {
+    return { ok:true, json: async () => ({ data: { payload: {} }, status: { status:'ok', updatedAt: Date.now(), error:null } }) };
+  }
+  return { ok:true, json: async () => ({ data:null, status:null }) };
+};`;
+  const dom = loadDom(fetchImpl);
+  const doc = dom.window.document;
+  setTimeout(async ()=>{
+    await dom.window.runSync(['churn']);
+    setTimeout(()=>{
+      assert(dom.window.__errors.length===0, '[sync-504-retry] no JS errors across a retried sync');
+      assert(dom.window.__churnAttempts===2, '[sync-504-retry] a raw HTTP 504 (no JSON body) is retried just like -32001 (2 POST attempts)');
+      const pill = doc.getElementById('sync-pill-churn');
+      assert(pill.classList.contains('ok'), '[sync-504-retry] pill ends up "ok" after the retry succeeds, not stuck on "error"');
       console.log('--- done ---');
       process.exit(process.exitCode||0);
     }, 100);
-  }, 400); // await runSync() below already blocks through the full ~2000ms retry backoff itself
+  }, 400);
 })();
