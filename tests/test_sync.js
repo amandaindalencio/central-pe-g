@@ -6,7 +6,7 @@ function loadDom(fetchImpl){
   html = html.replace(/<link[^>]*>/g, '');
   html = html.replace(/<script src="https:\/\/cdnjs[^"]*"><\/script>/, '');
   const stubScript = `<script>
-window.Chart = function(){ this.destroy=function(){}; this.update=function(){}; return this; };
+window.Chart = function(ctx, config){ this._ctx = ctx; this.data = (config && config.data) || {datasets:[]}; this.destroy=function(){}; this.update=function(){}; return this; };
 window.IntersectionObserver = function(){ this.observe=function(){}; this.disconnect=function(){}; };
 window.__errors = [];
 window.addEventListener('error', e => window.__errors.push(String(e.error && e.error.stack || e.message)));
@@ -94,7 +94,13 @@ window.fetch = async (url, opts) => {
 window.fetch = async (url, opts) => {
   if (url === '/api/data/churn') {
     return { ok:true, json: async () => ({
-      data: { payload: { '2026-01': [{name:'CLIENTE CHURN FAKE', documentId:'fakedoc1', lt:12, coord:'jefferson.vieira', squad:'Invictus', motivo:'Financeiro', churnDetail:'Não informado', valor:5000, data:'15/01'}] } },
+      data: { payload: {
+        '2026-01': [{name:'CLIENTE CHURN FAKE', documentId:'fakedoc1', lt:12, coord:'jefferson.vieira', squad:'Invictus', motivo:'Financeiro', churnDetail:'Não informado', valor:5000, data:'15/01'}],
+        // projeto ainda ativo com "Data de Churn" futura já cadastrada no Flow (reportado 03/11) —
+        // o pipeline já bucketiza isso em Novembro; o que faltava era o gráfico da Visão Geral
+        // enxergar esse mês (ver scenarioChurnEvoChartRefreshes abaixo).
+        '2026-11': [{name:'CLIENTE CHURN FUTURO FAKE', documentId:'fakedoc2', lt:8, coord:'nayaraventura', squad:'Billions', motivo:'Qualidade da Operação', churnDetail:'Não informado', valor:7000, data:'21/11'}],
+      } },
       status: { status:'ok', updatedAt: Date.now()-5400000, error:null }
     }) };
   }
@@ -107,6 +113,11 @@ window.fetch = async (url, opts) => {
     const pill = doc.getElementById('sync-pill-churn');
     assert(pill.classList.contains('ok'), '[churn-preseeded] churn pill shows ok status from /api/data');
     assert(doc.getElementById('churn-table').innerHTML.includes('CLIENTE CHURN FAKE'), '[churn-preseeded] churn table re-renders with the synced data');
+    const chart = dom.window._churnEvoChart;
+    assert(!!chart, '[churn-preseeded] overview churn evolution chart instance exists after sync');
+    const novIdx = chart.data.labels.indexOf('Nov');
+    assert(novIdx !== -1, '[churn-preseeded] chart includes a Novembro column');
+    assert(chart.data.datasets[1].data[novIdx] === 7000, '[churn-preseeded] chart Novembro value reflects the freshly-synced data (R$7.000), not stuck at the pre-sync (Jan-only) snapshot');
   }, 400);
 })();
 

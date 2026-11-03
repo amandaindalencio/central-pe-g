@@ -222,7 +222,7 @@ code{background:var(--surface-alt);border:1px solid var(--border);padding:1px 5p
   <div class="alert-title" style="margin-bottom:12px"><span class="alert-icon">🧭</span> Leitura da semana</div>
   <div id="overview-insights" class="three-col"></div>
   <div class="chart-card full">
-    <div class="chart-title">Evolução Mensal — Revenue Churn (Unidade) <span class="chart-title-tag">Jan–Set/2026</span></div>
+    <div class="chart-title">Evolução Mensal — Revenue Churn (Unidade) <span class="chart-title-tag" id="chart-churn-evo-tag">Jan–Set/2026</span></div>
     <div class="chart-wrap" style="height:260px"><canvas id="chartChurnEvo"></canvas></div>
   </div>
 </section>
@@ -1786,11 +1786,17 @@ function buildOverviewInsights(){
   ).join('');
 }
 function ddmmFromIso(iso){ const d=iso.split('-'); return d[2]+'/'+d[1]+'/'+d[0]; }
-function buildOverview(){
-  buildOverviewInsights();
-
-  const trend = MONTHS.map(m=>({mes:MONTH_SHORT[m],valor:sumBy(RAW.churnByMonth[m]||[],r=>r.valor),qty:(RAW.churnByMonth[m]||[]).length}));
-  new Chart(document.getElementById('chartChurnEvo'), {
+// Reportado 03/11: esse gráfico só era montado 1x no load inicial, com MONTHS puro (Jan–Set) — nunca
+// reconstruía depois de um sync de Churn, e nunca incluía Out/Nov/Dez mesmo quando RAW.churnByMonth já
+// tinha dado lá (ex.: churn agendado de projeto ainda ativo com data de churn futura, direto do campo
+// "Data de Churn" do próprio projeto no Flow — o pipeline já bucketiza isso certo, só o gráfico que
+// ignorava). Agora usa CHURN_MONTHS (Jan–Dez) e vira uma função própria, chamável de novo a cada sync.
+function buildChurnEvoChart(){
+  const trend = CHURN_MONTHS.map(m=>({mes:MONTH_SHORT[m],valor:sumBy(RAW.churnByMonth[m]||[],r=>r.valor),qty:(RAW.churnByMonth[m]||[]).length}));
+  const tagEl = document.getElementById('chart-churn-evo-tag');
+  if(tagEl) tagEl.textContent = MONTH_SHORT[CHURN_MONTHS[0]]+'–'+MONTH_SHORT[CHURN_MONTHS[CHURN_MONTHS.length-1]]+'/2026';
+  if(window._churnEvoChart) window._churnEvoChart.destroy();
+  window._churnEvoChart = new Chart(document.getElementById('chartChurnEvo'), {
     data:{ labels:trend.map(d=>d.mes), datasets:[
       {type:'bar',label:'Clientes',data:trend.map(d=>d.qty),yAxisID:'y2',order:2,backgroundColor:'rgba(28,25,23,.06)',borderColor:'rgba(28,25,23,.18)',borderWidth:1,borderRadius:4},
       {type:'line',label:'Revenue churn (R$)',data:trend.map(d=>d.valor),yAxisID:'y',order:1,borderColor:'#D6281A',backgroundColor:'rgba(214,40,26,.08)',borderWidth:3,pointRadius:5,pointBackgroundColor:'#D6281A',tension:.3,fill:true}
@@ -1803,6 +1809,10 @@ function buildOverview(){
         y2:{position:'right',grid:{display:false},ticks:{color:'rgba(28,25,23,.5)',font:{size:11}},title:{display:true,text:'Clientes',color:'rgba(28,25,23,.5)',font:{size:10}}}
       }}
   });
+}
+function buildOverview(){
+  buildOverviewInsights();
+  buildChurnEvoChart();
 }
 
 /* ============================================================
@@ -1915,7 +1925,7 @@ const SYNC_SERVICES = [
   },
   {
     id: 'churn', label: 'Revenue Churn', staleAfterMs: 24*3600*1000,
-    onData: (data) => { RAW.churnByMonth = data; renderChurnSection(); buildOverviewInsights(); },
+    onData: (data) => { RAW.churnByMonth = data; renderChurnSection(); buildOverviewInsights(); buildChurnEvoChart(); },
   },
   {
     id: 'previsao', label: 'Previsão', staleAfterMs: 24*3600*1000,

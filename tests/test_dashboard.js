@@ -431,6 +431,19 @@ setTimeout(()=>{
   assert(insightsHTML.includes('maior piora'), 'new insight: pior coordenação (month-over-month wording since 05/10 rewrite, was "na semana")');
   assert(insightsHTML.includes('respostas de NPS') && insightsHTML.includes('CSAT V4'), 'new insight: respostas NPS/CSAT recebidas');
 
+  // --- TEST: overview "Evolução Mensal — Revenue Churn" chart covers Jan–Dez, not frozen at Jan–Set
+  // (reported 03/11 — the chart was built once at load with plain MONTHS and never refreshed on sync,
+  // so Out/Nov/Dez churn already present in RAW.churnByMonth — e.g. a still-active project with a
+  // future "Data de Churn" set on it — never showed up) ---
+  (function checkChurnEvoChartFullYear(){
+    const chart = window._churnEvoChart;
+    assert(!!chart, 'overview churn evolution chart instance is tracked on window._churnEvoChart (so it can be rebuilt on sync)');
+    assert(chart.data.labels.length === 12, 'chart has all 12 months (Jan–Dez), not just Jan–Set');
+    assert(chart.data.labels[0]==='Jan' && chart.data.labels[11]==='Dez', 'chart month labels run Jan through Dez in order');
+    const tag = doc.getElementById('chart-churn-evo-tag').textContent;
+    assert(tag==='Jan–Dez/2026', `chart-title-tag reflects the full Jan–Dez scope, not hardcoded "Jan–Set/2026" (got "${tag}")`);
+  })();
+
   console.log('--- final window errors ---');
   window.__errors.forEach(e=>console.log('ERR:', e));
   assert(window.__errors.length===0, 'no JS errors after all interactions');
