@@ -150,6 +150,50 @@ window.fetch = async (url, opts) => {
   }, 400);
 })();
 
+// ---- Scenario 2d-ter: forecastItems with a real Data de Churn (confirmed:true) must NOT be double
+// counted (reported 03/11 — a still-active project can have both churnRequestDate AND a real churnDate
+// set; since 03/11 transformPrevisao prefers the real churnDate, and that same project is ALSO already
+// in RAW.churnByMonth via the same date — componentValue('previsao',...) and the overview/previsao
+// charts must exclude confirmed items so the combined totals don't count that project twice). ----
+(function scenarioPrevisaoConfirmedNotDoubleCounted(){
+  const fetchImpl = `
+window.fetch = async (url, opts) => {
+  if (url === '/api/data/churn') {
+    return { ok:true, json: async () => ({
+      data: { payload: { '2026-12': [{name:'CLIENTE CONFIRMADO FAKE', documentId:'fakedocdec', lt:9, coord:'nayaraventura', squad:'Billions', motivo:'Financeiro', churnDetail:'Não informado', valor:6000, data:'18/12'}] } },
+      status: { status:'ok', updatedAt: Date.now(), error:null }
+    }) };
+  }
+  if (url === '/api/data/previsao') {
+    return { ok:true, json: async () => ({
+      data: { payload: {
+        forecastItems: [
+          {name:'CLIENTE CONFIRMADO FAKE', squad:'Billions', coord:'nayaraventura', am:null, requestDate:'19/10/2026', noticeDays:60, projectedDate:'18/12/2026', projectedMonth:'2026-12', overdue:false, fee:6000, confirmed:true},
+          {name:'CLIENTE ESTIMADO FAKE', squad:'Invictus', coord:'jefferson.vieira', am:null, requestDate:'01/12/2026', noticeDays:30, projectedDate:'31/12/2026', projectedMonth:'2026-12', overdue:false, fee:2000, confirmed:false},
+        ],
+        forecastIncomplete: [], previsaoRiskPool: [], recoveryItems: [], activeMrrTotal: 500000
+      } },
+      status: { status:'ok', updatedAt: Date.now(), error:null }
+    }) };
+  }
+  return { ok:true, json: async () => ({ data:null, status:null }) };
+};`;
+  const dom = loadDom(fetchImpl);
+  const doc = dom.window.document;
+  setTimeout(()=>{
+    assert(dom.window.__errors.length===0, '[previsao-no-double-count] no JS errors on load');
+    fireChange(dom.window, 'churn-month-select', '2026-12');
+    const combinedHtml = doc.getElementById('kpi-churn-combined').innerHTML;
+    // Churn: R$6.000 (o confirmado) + Downsell: R$0 + Previsão: só o estimado (R$2.000, o confirmado
+    // NÃO entra de novo) = R$8.000 combinado — se desse R$14.000, estaria contando o confirmado 2x.
+    assert(combinedHtml.includes('8.000') && !combinedHtml.includes('14.000'), '[previsao-no-double-count] combined Revenue Churn KPI does not double-count the confirmed project (6.000 churn + 2.000 estimated previsão = 8.000, not 14.000)');
+    fireChange(dom.window, 'churn-month-select', 'all');
+    const chart = dom.window._churnEvoChart;
+    const decIdx = chart.data.labels.indexOf('Dez');
+    assert(chart.data.datasets[1].data[decIdx] === 8000, `[previsao-no-double-count] overview chart Dezembro total is 8.000 (not double-counted), got ${chart.data.datasets[1].data[decIdx]}`);
+  }, 400);
+})();
+
 // ---- Scenario 2d-bis: % Churn do mês card (19/10) — reads RAW.churnByMonth (synced by "churn") against
 // RAW.activeMrrTotal (synced by "previsao", carried over from fetchPrevisaoData's activeProjects with no
 // extra Cockpit call). Both services pre-populated together here since the card lives in Revenue Churn

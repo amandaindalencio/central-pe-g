@@ -442,6 +442,16 @@ setTimeout(()=>{
     assert(chart.data.labels[0]==='Jan' && chart.data.labels[11]==='Dez', 'chart month labels run Jan through Dez in order');
     const tag = doc.getElementById('chart-churn-evo-tag').textContent;
     assert(tag==='Jan–Dez/2026', `chart-title-tag reflects the full Jan–Dez scope, not hardcoded "Jan–Set/2026" (got "${tag}")`);
+    assert(chart.data.datasets[1].label.includes('Churn+Downsell+Previsão'), 'chart line dataset is labeled as the combined total, not just plain "Revenue churn"');
+  })();
+
+  // --- TEST: Previsão "Realizado + Projetado" chart also covers Jan–Dez (reported 03/11 — Dezembro
+  // never appeared because allMonths was MONTHS+whatever the 30-day estimate happened to produce) ---
+  (function checkPrevisaoChartFullYear(){
+    const chart = window._previsaoCombinedChart;
+    assert(!!chart, 'previsao combined chart instance is tracked on window._previsaoCombinedChart');
+    assert(chart.data.labels.length >= 12, 'previsao chart covers at least the full Jan–Dez range');
+    assert(chart.data.labels.includes('Dez'), 'previsao chart includes Dezembro (was always missing before the fix)');
   })();
 
   console.log('--- final window errors ---');

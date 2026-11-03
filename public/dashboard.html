@@ -717,15 +717,21 @@ function previsaoRows(month, squad){
 }
 const CHURN_COMPONENT_LABEL = {churn:'Churn', downsell:'Downsell', previsao:'Previsão'};
 let churnComponents = {churn:true, downsell:true, previsao:true};
+// previsaoRows(...).filter(r=>!r.confirmed): a partir do fix de 03/11, forecastItems usa a Data de
+// Churn real do projeto quando ela já existe (r.confirmed===true) — nesse caso o mesmo projeto já
+// está contado em componentValue('churn',...) via churnRows/RAW.churnByMonth (mesma data, mesmo
+// valor). Sem esse filtro, o card "Revenue Churn combinado" (Churn+Downsell+Previsão) contaria esses
+// projetos 2x. Só entra em "Previsão" quem ainda não tem data confirmada (estimativa de aviso prévio).
+function previsaoUnconfirmedRows(month, squad){ return previsaoRows(month, squad).filter(r=>!r.confirmed); }
 function componentRows(comp, month, squad){
   if(comp==='churn') return churnRows(month, squad);
   if(comp==='downsell') return downsellRows(month, squad);
-  return previsaoRows(month, squad);
+  return previsaoUnconfirmedRows(month, squad);
 }
 function componentValue(comp, month, squad){
   if(comp==='churn') return sumBy(churnRows(month, squad), r=>r.valor);
   if(comp==='downsell') return sumBy(downsellRows(month, squad), r=>Math.abs(r.delta||0));
-  return sumBy(previsaoRows(month, squad), r=>r.fee);
+  return sumBy(previsaoUnconfirmedRows(month, squad), r=>r.fee);
 }
 
 /* ---- nps/csat monthly-array accessors ---- */
@@ -1025,12 +1031,19 @@ function renderPrevisao(squad){
   buildPrevisaoCombinedChart(squad);
   buildPrevisaoRiskTable(squad);
 }
+// Reportado 03/11: Dezembro (e Outubro) nunca apareciam aqui — allMonths era MONTHS (Jan–Set) mais só
+// os meses "extras" que o cálculo de 30 dias (churnRequestDate+30) por acaso produzisse, e já existiam
+// projetos com Data de Churn real caindo em Dezembro que esse cálculo simplesmente não alcançava. Agora
+// usa CHURN_MONTHS (Jan–Dez) direto. "Churn realizado" também passa a cobrir todo CHURN_MONTHS (antes
+// só ia até Set, então nem o Novembro confirmado aparecia). E "Previsto (aviso prévio)" só mostra quem
+// AINDA não tem Data de Churn real (r.confirmed===false) — quem já tem, já está contado em "Churn
+// realizado" pela mesma data; mostrar os dois lados seria repetir o mesmo projeto duas vezes no gráfico.
 function buildPrevisaoCombinedChart(squad){
-  const forecastRows = previsaoRows('all', squad);
+  const forecastRows = previsaoUnconfirmedRows('all', squad);
   const byMonth = groupSum(forecastRows, r=>r.projectedMonth, r=>r.fee);
-  const extraMonths = Object.keys(byMonth).filter(m=>!MONTHS.includes(m)).sort();
-  const allMonths = [...MONTHS, ...extraMonths];
-  const realizado = allMonths.map(m=> MONTHS.includes(m) ? sumBy(churnRows(m, squad), r=>r.valor) : null);
+  const extraMonths = Object.keys(byMonth).filter(m=>!CHURN_MONTHS.includes(m)).sort();
+  const allMonths = [...CHURN_MONTHS, ...extraMonths];
+  const realizado = allMonths.map(m=> CHURN_MONTHS.includes(m) ? sumBy(churnRows(m, squad), r=>r.valor) : null);
   const projetado = allMonths.map(m=> byMonth[m] || null);
   if(window._previsaoCombinedChart) window._previsaoCombinedChart.destroy();
   window._previsaoCombinedChart = new Chart(document.getElementById('chartPrevisaoCombined'), {
@@ -1791,15 +1804,27 @@ function ddmmFromIso(iso){ const d=iso.split('-'); return d[2]+'/'+d[1]+'/'+d[0]
 // tinha dado lá (ex.: churn agendado de projeto ainda ativo com data de churn futura, direto do campo
 // "Data de Churn" do próprio projeto no Flow — o pipeline já bucketiza isso certo, só o gráfico que
 // ignorava). Agora usa CHURN_MONTHS (Jan–Dez) e vira uma função própria, chamável de novo a cada sync.
+// Reportado 03/11: o valor mostrado era só o Churn "puro" — pedido explícito do usuário foi mostrar o
+// TOTAL (Churn + Downsell + Previsão), igual já é feito no card "Revenue Churn combinado" da sessão de
+// Revenue Churn. Cuidado de não contar 2x: a partir do fix de hoje, forecastItems (Previsão) usa a
+// Data de Churn REAL do projeto quando ela já existe — ou seja, um projeto com Data de Churn futura já
+// aparece tanto em RAW.churnByMonth quanto em forecastItems (confirmado ao vivo: os mesmos 3 projetos
+// de Dezembro aparecem nos dois, com o mesmo valor). Por isso só soma a Previsão que ainda NÃO tem
+// data confirmada (r.confirmed===false, só estimativa de aviso prévio) — a parte confirmada já veio
+// pelo Churn.
 function buildChurnEvoChart(){
-  const trend = CHURN_MONTHS.map(m=>({mes:MONTH_SHORT[m],valor:sumBy(RAW.churnByMonth[m]||[],r=>r.valor),qty:(RAW.churnByMonth[m]||[]).length}));
+  const trend = CHURN_MONTHS.map(m=>({
+    mes:MONTH_SHORT[m],
+    valor: componentValue('churn',m) + componentValue('downsell',m) + componentValue('previsao',m),
+    qty: churnRows(m).length + previsaoUnconfirmedRows(m).length,
+  }));
   const tagEl = document.getElementById('chart-churn-evo-tag');
   if(tagEl) tagEl.textContent = MONTH_SHORT[CHURN_MONTHS[0]]+'–'+MONTH_SHORT[CHURN_MONTHS[CHURN_MONTHS.length-1]]+'/2026';
   if(window._churnEvoChart) window._churnEvoChart.destroy();
   window._churnEvoChart = new Chart(document.getElementById('chartChurnEvo'), {
     data:{ labels:trend.map(d=>d.mes), datasets:[
       {type:'bar',label:'Clientes',data:trend.map(d=>d.qty),yAxisID:'y2',order:2,backgroundColor:'rgba(28,25,23,.06)',borderColor:'rgba(28,25,23,.18)',borderWidth:1,borderRadius:4},
-      {type:'line',label:'Revenue churn (R$)',data:trend.map(d=>d.valor),yAxisID:'y',order:1,borderColor:'#D6281A',backgroundColor:'rgba(214,40,26,.08)',borderWidth:3,pointRadius:5,pointBackgroundColor:'#D6281A',tension:.3,fill:true}
+      {type:'line',label:'Revenue Churn total (Churn+Downsell+Previsão)',data:trend.map(d=>d.valor),yAxisID:'y',order:1,borderColor:'#D6281A',backgroundColor:'rgba(214,40,26,.08)',borderWidth:3,pointRadius:5,pointBackgroundColor:'#D6281A',tension:.3,fill:true}
     ]},
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
       plugins:{legend:{labels:{color:'rgba(28,25,23,.65)',font:{size:11},boxWidth:14}},tooltip:{callbacks:{label:ctx=>ctx.dataset.yAxisID==='y'?' '+fmtBRL(ctx.raw):' '+ctx.raw+' clientes'}}},
@@ -1942,6 +1967,12 @@ const SYNC_SERVICES = [
       // trazido por este sync — sem isso ele ficaria preso no "—" até alguém sincronizar Churn também.
       if(churnComponents.churn) renderChurnSection();
       buildOverviewInsights();
+      // o gráfico "Evolução Mensal" da Visão Geral soma Churn+Downsell+Previsão — sem isso ele ficava
+      // com a Previsão desatualizada até alguém também sincronizar Churn (reportado 03/11: no load
+      // inicial o sync de 'churn' roda ANTES do de 'previsao' na lista de SYNC_SERVICES, então o
+      // gráfico já tinha sido montado com RAW.forecastItems ainda velho quando só o onData de churn
+      // chamava essa função).
+      buildChurnEvoChart();
     },
   },
   {
