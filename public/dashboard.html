@@ -2043,19 +2043,14 @@ function syncClearError(id){
   if(existing) existing.remove();
 }
 
-// Erro de timeout é retryable por natureza — duas formas conhecidas, ambas pela mesma causa raiz
-// (uma chamada ao Cockpit que fica perto do teto de 60s da função da Vercel):
-//  (a) "-32001"/"timed out" — o cliente MCP (DEFAULT_REQUEST_TIMEOUT_MSEC do SDK) corta a chamada
-//      sozinho e devolve um erro estruturado da nossa própria rota (reportado 02/11, Renovação).
-//  (b) "HTTP 50x" — a própria Vercel mata a função ANTES de qualquer JSON nosso voltar (reportado
-//      03/11, as 5 áreas de uma vez: Renovação/NPS & CSAT/Revenue Churn/Previsão/Help Flag) — nesse
-//      caso runSyncOnce() nunca recebe body.error, só o HTTP status puro.
-// Como os tetos envolvidos (cliente MCP e Vercel) já são o máximo possível aqui (ver nota de
-// maxDuration no route.js), a única alavanca real do nosso lado é tentar de novo — uma nova
-// invocação da função ganha um orçamento de 60s inteiro novo (e pode cair numa rota de rede
-// diferente até lá), então uma chamada que passou perto do limite tem uma segunda chance real, não
-// só repetir o mesmo timeout.
-function isRetryableSyncError(msg){ return /timed out|-32001|HTTP 50\d/i.test(msg||''); }
+// Retry automático REMOVIDO em 09/11 — orientação direta do time de tech do Flow depois de detectar
+// sobrecarga no Cockpit/Flow (ver print "Quem está chamando?": picos de centenas de chamadas em 2h,
+// nossa conta entre as maiores): "Se der timeout ou erro 504, não peça para o agente tentar de novo.
+// Reduza o pedido." Tentar de novo automaticamente (como esse código fazia desde 02/11) é exatamente
+// o oposto do que foi pedido — dobra a carga em cima de um backend que já está sob pressão, em vez de
+// aliviar. Timeout agora cai direto no estado de erro, sem segunda tentativa; a correção de verdade é
+// reduzir o que cada sync pede (ver lib/cockpit.js — chamadas viraram sequenciais, não mais em
+// paralelo, pela mesma orientação: "uma consulta de cada vez").
 async function runSyncOnce(svc){
   const res = await fetch('/api/sync/'+svc.id, {method:'POST'});
   const body = await res.json().catch(()=>({}));
@@ -2067,15 +2062,7 @@ async function runSync(ids){
     syncSetPillUI(svc.id, 'running', 'sincronizando…');
     syncClearError(svc.id);
     try{
-      let now;
-      try{
-        now = await runSyncOnce(svc);
-      }catch(e){
-        if(!isRetryableSyncError(e.message)) throw e;
-        syncSetPillUI(svc.id, 'running', 'tentando de novo…');
-        await new Promise(r=>setTimeout(r, 2000));
-        now = await runSyncOnce(svc);
-      }
+      const now = await runSyncOnce(svc);
       await syncRefreshFromApi(svc);
       syncSetPillUI(svc.id, 'ok', syncRelativeTime(now));
     }catch(e){

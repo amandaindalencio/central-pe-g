@@ -385,44 +385,11 @@ window.fetch = async (url, opts) => {
   }, 400);
 })();
 
-// ---- Scenario 4: POST /api/sync/renovacao times out (MCP error -32001) once, then succeeds on
-// retry — reported 02/11 ("Renovação: MCP error -32001: Request timed out"). runSync() now retries
-// once automatically on this specific class of error (the MCP client's own 60s timeout races Vercel's
-// own 60s function ceiling, so a call near that edge fails intermittently — a fresh invocation via
-// retry gets a full new 60s budget, a real second chance, not just a repeat of the same timeout). ----
-(function scenarioSyncTimeoutRetrySucceeds(){
-  const fetchImpl = `
-window.__renovacaoAttempts = 0;
-window.fetch = async (url, opts) => {
-  if (opts && opts.method === 'POST' && url === '/api/sync/renovacao') {
-    window.__renovacaoAttempts++;
-    if (window.__renovacaoAttempts === 1) {
-      return { ok:false, json: async () => ({ ok:false, error:'MCP error -32001: Request timed out' }) };
-    }
-    return { ok:true, json: async () => ({ ok:true, updatedAt: Date.now() }) };
-  }
-  if (url === '/api/data/renovacao') {
-    return { ok:true, json: async () => ({ data: { payload: [] }, status: { status:'ok', updatedAt: Date.now(), error:null } }) };
-  }
-  return { ok:true, json: async () => ({ data:null, status:null }) };
-};`;
-  const dom = loadDom(fetchImpl);
-  const doc = dom.window.document;
-  setTimeout(async ()=>{
-    await dom.window.runSync(['renovacao']);
-    setTimeout(()=>{
-      assert(dom.window.__errors.length===0, '[sync-timeout-retry] no JS errors across a retried sync');
-      assert(dom.window.__renovacaoAttempts===2, '[sync-timeout-retry] runSync actually retried once after the -32001 timeout (2 POST attempts)');
-      const pill = doc.getElementById('sync-pill-renovacao');
-      assert(pill.classList.contains('ok'), '[sync-timeout-retry] pill ends up "ok" after the retry succeeds, not stuck on "error"');
-      const errBox = doc.getElementById('sync-error-box').textContent;
-      assert(!errBox.includes('-32001'), '[sync-timeout-retry] no error surfaced to the user once the retry succeeded');
-    }, 100);
-  }, 400);
-})();
-
-// ---- Scenario 5: both attempts time out — retry doesn't mask a real, persistent failure ----
-(function scenarioSyncTimeoutRetryStillFails(){
+// ---- Scenario 4: retry-on-timeout REMOVED 09/11 (Flow tech team: "se der timeout ou erro 504, não
+// peça para o agente tentar de novo. Reduza o pedido." — retrying automatically was adding load to an
+// already-overloaded backend, the opposite of what was asked). A timeout/504 on /api/sync/renovacao
+// must now go straight to the error state with exactly ONE POST attempt, no second try. ----
+(function scenarioSyncTimeoutNoRetry(){
   const fetchImpl = `
 window.__renovacaoAttempts = 0;
 window.fetch = async (url, opts) => {
@@ -430,10 +397,9 @@ window.fetch = async (url, opts) => {
     window.__renovacaoAttempts++;
     return { ok:false, json: async () => ({ ok:false, error:'MCP error -32001: Request timed out' }) };
   }
-  // Pre-seed renovacao as freshly synced so initSync()'s own stale-check (which runs on page load,
-  // independent of the explicit runSync() call below) does NOT ALSO auto-trigger a competing sync for
-  // renovacao — without this, two independent runSync(['renovacao']) calls race each other and each
-  // retries on its own, making the attempt count non-deterministic instead of exactly 2.
+  // Pre-seed renovacao as freshly synced so initSync()'s own stale-check (page load) does NOT ALSO
+  // auto-trigger a competing runSync(['renovacao']) — otherwise 2 independent calls race and the
+  // attempt count becomes non-deterministic instead of exactly 1.
   if (url === '/api/data/renovacao') {
     return { ok:true, json: async () => ({ data: { payload: [] }, status: { status:'ok', updatedAt: Date.now(), error:null } }) };
   }
@@ -444,33 +410,30 @@ window.fetch = async (url, opts) => {
   setTimeout(async ()=>{
     await dom.window.runSync(['renovacao']);
     setTimeout(()=>{
-      assert(dom.window.__errors.length===0, '[sync-timeout-retry-fail] no JS errors when both attempts fail');
-      assert(dom.window.__renovacaoAttempts===2, '[sync-timeout-retry-fail] still only retries once (2 attempts total), not an infinite loop');
+      assert(dom.window.__errors.length===0, '[sync-timeout-no-retry] no JS errors on a timed-out sync');
+      assert(dom.window.__renovacaoAttempts===1, '[sync-timeout-no-retry] exactly 1 POST attempt, no automatic retry (09/11: retrying adds load to an overloaded Flow, instead of reducing it)');
       const pill = doc.getElementById('sync-pill-renovacao');
-      assert(pill.classList.contains('error'), '[sync-timeout-retry-fail] pill correctly shows "error" when the retry also fails');
+      assert(pill.classList.contains('error'), '[sync-timeout-no-retry] pill goes straight to "error", no "tentando de novo…" intermediate state');
       const errBox = doc.getElementById('sync-error-box').textContent;
-      assert(errBox.includes('-32001'), '[sync-timeout-retry-fail] real, persistent error still surfaces to the user after the retry is exhausted');
+      assert(errBox.includes('-32001'), '[sync-timeout-no-retry] real error message still surfaces to the user');
     }, 100);
-  }, 400); // await runSync() below already blocks through the full ~2000ms retry backoff itself
+  }, 400);
 })();
 
-// ---- Scenario 6: raw "HTTP 504" (Vercel platform kills the function before any of our own JSON
-// comes back — reported 03/11, all 5 services at once: Renovação/NPS & CSAT/Revenue Churn/Previsão/
-// Help Flag) must be retried too, same as the MCP-level -32001 — same root cause (a call near the
-// 60s ceiling), just surfacing without a JSON body this time. ----
-(function scenarioSyncHttp504Retried(){
+// ---- Scenario 5: same for a raw "HTTP 504" (Vercel platform kills the function before any of our
+// own JSON comes back) — must also NOT retry. ----
+(function scenarioSync504NoRetry(){
   const fetchImpl = `
 window.__churnAttempts = 0;
 window.fetch = async (url, opts) => {
   if (opts && opts.method === 'POST' && url === '/api/sync/churn') {
     window.__churnAttempts++;
-    if (window.__churnAttempts === 1) {
-      // Vercel's own 504 page, not JSON from our route — res.json() rejects, runSyncOnce falls
-      // back to "HTTP "+res.status with no body.error to read.
-      return { ok:false, status:504, json: async () => { throw new Error('Unexpected token < in JSON'); } };
-    }
-    return { ok:true, json: async () => ({ ok:true, updatedAt: Date.now() }) };
+    // Vercel's own 504 page, not JSON from our route — res.json() rejects, runSyncOnce falls
+    // back to "HTTP "+res.status with no body.error to read.
+    return { ok:false, status:504, json: async () => { throw new Error('Unexpected token < in JSON'); } };
   }
+  // Pre-seed churn as freshly synced so initSync()'s own stale-check doesn't also auto-trigger a
+  // competing runSync(['churn']) — see same note in scenarioSyncTimeoutNoRetry above.
   if (url === '/api/data/churn') {
     return { ok:true, json: async () => ({ data: { payload: {} }, status: { status:'ok', updatedAt: Date.now(), error:null } }) };
   }
@@ -481,10 +444,10 @@ window.fetch = async (url, opts) => {
   setTimeout(async ()=>{
     await dom.window.runSync(['churn']);
     setTimeout(()=>{
-      assert(dom.window.__errors.length===0, '[sync-504-retry] no JS errors across a retried sync');
-      assert(dom.window.__churnAttempts===2, '[sync-504-retry] a raw HTTP 504 (no JSON body) is retried just like -32001 (2 POST attempts)');
+      assert(dom.window.__errors.length===0, '[sync-504-no-retry] no JS errors on a 504 sync');
+      assert(dom.window.__churnAttempts===1, '[sync-504-no-retry] exactly 1 POST attempt on a raw HTTP 504 too, no retry');
       const pill = doc.getElementById('sync-pill-churn');
-      assert(pill.classList.contains('ok'), '[sync-504-retry] pill ends up "ok" after the retry succeeds, not stuck on "error"');
+      assert(pill.classList.contains('error'), '[sync-504-no-retry] pill goes straight to "error"');
       console.log('--- done ---');
       process.exit(process.exitCode||0);
     }, 100);

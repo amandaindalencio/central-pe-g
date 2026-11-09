@@ -9,9 +9,12 @@ import {
   transformPrevisao, transformHelpFlag,
 } from '@/lib/transforms';
 
-// NPS/CSAT and Help Flag fetch ~9-18 calls to the Cockpit MCP gateway in
-// parallel — needs more than the default timeout. 60s is the max Vercel
-// allows on Hobby.
+// NPS/CSAT and Help Flag fetch ~18-23 calls to the Cockpit MCP gateway. Since
+// 09/11 these run in sequence, not parallel (tech team at Flow asked for
+// "uma consulta de cada vez" after detecting overload — ver lib/cockpit.js),
+// so each call's time adds up instead of being capped by the slowest one.
+// 60s is still the max Vercel allows on Hobby; if a sync routinely times out
+// now, the fix is to reduce how much it asks for, not to re-parallelize.
 export const maxDuration = 60;
 
 // Tried pinning preferredRegion='gru1' (São Paulo) after a function log
@@ -29,18 +32,15 @@ const SERVICES = {
   helpflag: { fetch: fetchHelpFlagHistory, transform: transformHelpFlag, label: 'Help Flag' },
 };
 
-// Timeout do protocolo MCP (código -32001) usa o mesmo teto de 60s da própria função da Vercel (ver
-// nota de maxDuration acima) — uma chamada que fica bem na borda desse limite falha de forma
-// intermitente, sem relação com o dado em si. Reportado 02/11 (Renovação: "MCP error -32001: Request
-// timed out"). Não há mais orçamento de tempo pra esperar DENTRO desta mesma invocação (os dois tetos
-// já são o máximo possível), então o único jeito real de dar uma segunda chance é chamar fetch() de
-// novo — mas isso certamente estoura os 60s totais da função. Por isso o retry físico mora só no
-// botão "Sincronizar" do dashboard (cada clique é uma invocação nova, com orçamento de 60s do zero);
-// aqui, no cron, só deixamos a mensagem de erro clara o bastante pra reconhecer esse caso específico
-// quando alguém olhar o status — o próprio cron do dia seguinte já é, na prática, o retry.
+// Timeout do protocolo MCP (código -32001) ou HTTP 50x da própria Vercel. Até 09/11 isso disparava um
+// retry automático pelo botão "Sincronizar" — removido por orientação direta do time de tech do Flow
+// depois de detectarem sobrecarga no Cockpit/Flow causada por volume de chamadas, com instrução
+// explícita de "se der timeout ou erro 504, não peça para o agente tentar de novo, reduza o pedido".
+// Retentar automaticamente ia na contramão disso (mais carga, não menos), então a mensagem agora
+// orienta pra esperar em vez de clicar de novo.
 function isTimeoutError(e) {
   const msg = String((e && e.message) || e || '');
-  return /timed out|-32001/i.test(msg);
+  return /timed out|-32001|HTTP 50\d/i.test(msg);
 }
 
 async function runService(service) {
@@ -60,7 +60,7 @@ async function runService(service) {
     const now = Date.now();
     const rawMessage = String((e && e.message) || e);
     const message = isTimeoutError(e)
-      ? `${rawMessage} — timeout intermitente no gateway MCP (não é problema com o dado em si). Tente sincronizar de novo pelo botão (cada clique já tenta 2x sozinho); se veio do cron automático, o próximo cron já tenta de novo.`
+      ? `${rawMessage} — timeout no gateway MCP, provavelmente por sobrecarga no Flow/Cockpit. Não clique em sincronizar de novo agora (isso só aumenta a carga); o próximo cron automático tenta sozinho mais tarde.`
       : rawMessage;
     await setDoc(`sync:status:${service}`, { status: 'error', updatedAt: now, error: { message } });
     return { status: 500, body: { ok: false, error: message } };
