@@ -175,6 +175,17 @@ setTimeout(()=>{
     const churnOpts = Array.from(doc.getElementById('churn-month-select').options).map(o=>o.value);
     assert(churnOpts.filter(v=>v==='2026-10').length === 1, 'churn month select still has exactly one Outubro option (no duplicate from MONTHS_INCL_OCT)');
   })();
+
+  // --- TEST: November now visible in NPS/CSAT only (09/11 — "já temos respostas registradas nesse
+  // mês"), Help Flag stays at Jan–Out on purpose since it wasn't part of this request ---
+  (function checkNovemberNpscxOnly(){
+    const npscxOpts = Array.from(doc.getElementById('npscx-month-select').options).map(o=>o.value);
+    assert(npscxOpts.includes('2026-11'), 'npscx month select includes Novembro (2026-11)');
+    const npscxGeral = doc.getElementById('npscx-month-select').options[0].textContent;
+    assert(npscxGeral.includes('Jan–Nov'), `npscx "Geral" option reflects the extended Jan–Nov scope (got "${npscxGeral}")`);
+    const hfOpts = Array.from(doc.getElementById('hf-month-select').options).map(o=>o.value);
+    assert(!hfOpts.includes('2026-11'), 'hf month select does NOT get Novembro (out of scope for this request)');
+  })();
   const hfKpiAll = doc.getElementById('kpi-helpflag').innerHTML;
   fireChange('hf-month-select', '2026-01');
   const hfKpiJan = doc.getElementById('kpi-helpflag').innerHTML;
@@ -189,8 +200,8 @@ setTimeout(()=>{
   assert(doc.getElementById('hf-churn-cross-box').innerHTML.includes('%'), 'hf churn cross box renders a percentage insight');
   assert(doc.getElementById('hf-governance-grid').innerHTML.includes('select'), 'hf governance grid renders per-coordinator selects');
   const govGridHTML = doc.getElementById('hf-governance-grid').innerHTML;
-  assert(!govGridHTML.includes('Ariel Pinguelli') && !govGridHTML.includes('Bruno Zorzan') && !govGridHTML.includes('Carolina Machado') && !govGridHTML.includes('Guilherme Canestri') && !govGridHTML.includes('Rafaela Tolomeu') && !govGridHTML.includes('Ruan Silva') && !govGridHTML.includes('Vitor Cruz') && !govGridHTML.includes('Sem coordenador'), 'hf governance grid excludes inactive coordinators');
-  assert(govGridHTML.includes('Jefferson Vieira') || govGridHTML.includes('Melissa Pessoa') || govGridHTML.includes('Nayara Ventura'), 'hf governance grid still includes active coordinators');
+  assert(!govGridHTML.includes('Ariel Pinguelli') && !govGridHTML.includes('Bruno Zorzan') && !govGridHTML.includes('Carolina Machado') && !govGridHTML.includes('Guilherme Canestri') && !govGridHTML.includes('Rafaela Tolomeu') && !govGridHTML.includes('Ruan Silva') && !govGridHTML.includes('Vitor Cruz') && !govGridHTML.includes('Melissa Pessoa') && !govGridHTML.includes('Sem coordenador'), 'hf governance grid excludes inactive coordinators (Melissa Pessoa removed 09/11 — não é mais coordenadora)');
+  assert(govGridHTML.includes('Jefferson Vieira') || govGridHTML.includes('Nayara Ventura'), 'hf governance grid still includes active coordinators');
   assert(govGridHTML.includes('Clientes em risco'), 'hf governance card shows a collapsible at-risk client list');
   assert(govGridHTML.includes('da carteira ativa em risco'), 'hf governance card shows active portfolio ratio');
 
@@ -199,7 +210,10 @@ setTimeout(()=>{
     const el = doc.getElementById('hf-weekly-trend');
     assert(!!el && el.innerHTML.trim().length>0, 'hf weekly trend table renders');
     const bodyRows = el.querySelectorAll('tbody tr');
-    assert(bodyRows.length === 12, 'hf weekly trend table has one row per active coordinator (12)');
+    // Nota: a tabela lê as chaves direto de RAW.hfWeeklyTrend.byCoord (snapshot estático assado no
+    // publish, com os 12 coordenadores de antes da remoção da Melissa Pessoa em 09/11) — só reflete
+    // os 11 atuais depois de um sync de verdade (ver scenarioHelpFlagNoMelissa em tests/test_sync.js).
+    assert(bodyRows.length === 12, 'hf weekly trend table row count matches the static baked snapshot (12 — pre-09/11 Melissa Pessoa removal; live sync will show 11, see test_sync.js)');
     const headers = el.querySelectorAll('thead th');
     assert(headers.length === 14, 'hf weekly trend table has coord column + squad column + 12 week columns');
     assert(!el.innerHTML.includes('undefined') && !el.innerHTML.includes('NaN'), 'no undefined/NaN in hf weekly trend table');
@@ -265,8 +279,8 @@ setTimeout(()=>{
 
   // --- TEST: hf-coord-select (Coordenação drilldown) also filtered to active coordinators only ---
   const hfCoordOptsHTML = doc.getElementById('hf-coord-select').innerHTML;
-  assert(!hfCoordOptsHTML.includes('Ariel Pinguelli') && !hfCoordOptsHTML.includes('Bruno Zorzan') && !hfCoordOptsHTML.includes('Sem coordenador'), 'hf coordenacao select excludes inactive coordinators');
-  assert(hfCoordOptsHTML.includes('Jefferson Vieira') || hfCoordOptsHTML.includes('Melissa Pessoa'), 'hf coordenacao select still includes active coordinators');
+  assert(!hfCoordOptsHTML.includes('Ariel Pinguelli') && !hfCoordOptsHTML.includes('Bruno Zorzan') && !hfCoordOptsHTML.includes('Melissa Pessoa') && !hfCoordOptsHTML.includes('Sem coordenador'), 'hf coordenacao select excludes inactive coordinators (Melissa Pessoa removed 09/11)');
+  assert(hfCoordOptsHTML.includes('Jefferson Vieira') || hfCoordOptsHTML.includes('Nayara Ventura'), 'hf coordenacao select still includes active coordinators');
 
   // --- TEST: Churn Player (CS) drilldown removed by explicit user request (kept only in NPS/CSAT) ---
   assert(!doc.getElementById('churn-player-select'), 'churn player select no longer rendered in Revenue Churn');
@@ -353,7 +367,7 @@ setTimeout(()=>{
   assert(!hfMonthOpts.includes('2026-11'), 'Help Flag month select does NOT get Novembro (out of scope for this request)');
   assert(!hfMonthOpts.includes('2026-12'), 'Help Flag month select does NOT get Dezembro (out of scope for this request)');
   const npscxMonthOpts = Array.from(doc.getElementById('npscx-month-select').options).map(o=>o.value);
-  assert(!npscxMonthOpts.includes('2026-11'), 'NPS/CSAT month select does NOT get Novembro (out of scope for this request)');
+  // NPS/CSAT ganhou Novembro em 09/11 (ver checkNovemberNpscxOnly acima) — só Dezembro segue fora de escopo.
   assert(!npscxMonthOpts.includes('2026-12'), 'NPS/CSAT month select does NOT get Dezembro (out of scope for this request)');
 
   // --- TEST: Renovação section built (28/09) using cockpit_entradas_saidas_renovacoes_query data ---
@@ -425,8 +439,9 @@ setTimeout(()=>{
   assert(!insightsHTML.includes('combina os piores sinais em Set'), 'removed insight: worst combined coordenação signals');
   assert(!insightsHTML.includes('Previsão em aberto:'), 'removed insight: forecast vs realized churn multiple');
   assert(insightsHTML.includes('Help Flag antecipa risco real'), 'kept insight: Help Flag predicts churn');
-  assert(insightsHTML.includes('Previsão'), 'new insight: novos projetos na Previsão de Churn');
-  assert(insightsHTML.includes('de MRR'), 'new-forecast insight includes total MRR of the entrants');
+  assert(insightsHTML.includes('Data de Solicitação'), 'new insight: novos pedidos de churn (Data de Solicitação)');
+  assert(insightsHTML.includes('de MRR em aviso prévio'), 'new-forecast insight includes total MRR of the new requests');
+  assert(insightsHTML.includes('efetivamente tiveram o status alterado para Churned'), 'new insight (09/11): also reports how many actually had status changed to Churned in the same window, not just new requests');
   assert(insightsHTML.includes('Carteira ativa') && insightsHTML.includes('HS≤21'), 'new insight: carteira-wide HS≤21 trend present (now computed dynamically from RAW.helpFlagByMonth, month-over-month since 05/10 rewrite)');
   assert(insightsHTML.includes('maior piora'), 'new insight: pior coordenação (month-over-month wording since 05/10 rewrite, was "na semana")');
   assert(insightsHTML.includes('respostas de NPS') && insightsHTML.includes('CSAT V4'), 'new insight: respostas NPS/CSAT recebidas');

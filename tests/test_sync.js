@@ -150,6 +150,50 @@ window.fetch = async (url, opts) => {
   }, 400);
 })();
 
+// ---- Scenario 2d-bis-2: overview insight #2 reports BOTH new churn requests (Data de Solicitação)
+// AND actual status-changed-to-Churned confirmations in the same 7-day window (09/11 — "quantos
+// projetos tiveram a Data de Solicitação preenchida nesse período e quantos efetivamente tiveram o
+// status passado para Churned"). A project with a future-scheduled churnDate (statuses:'active', not
+// yet really Churned) must NOT count as a confirmation, even if its date falls in the window. ----
+(function scenarioChurnRequestsVsConfirmations(){
+  const threeDaysAgo = new Date(Date.now() - 3*86400000);
+  const dd = String(threeDaysAgo.getDate()).padStart(2,'0');
+  const mm = String(threeDaysAgo.getMonth()+1).padStart(2,'0');
+  const ddmm = `${dd}/${mm}`;
+  const monthKey = `2026-${mm}`;
+  const fetchImpl = `
+window.fetch = async (url, opts) => {
+  if (url === '/api/data/churn') {
+    return { ok:true, json: async () => ({
+      data: { payload: { '${monthKey}': [
+        {name:'CLIENTE JA CHURNED FAKE', documentId:'fakedocchurned', lt:5, coord:'jefferson.vieira', squad:'Invictus', motivo:'Financeiro', churnDetail:'Não informado', valor:4000, data:'${ddmm}', statuses:'churned'},
+        {name:'CLIENTE AGENDADO FAKE', documentId:'fakedocagendado', lt:5, coord:'jefferson.vieira', squad:'Invictus', motivo:'Financeiro', churnDetail:'Não informado', valor:9999, data:'${ddmm}', statuses:'active'}
+      ] } },
+      status: { status:'ok', updatedAt: Date.now(), error:null }
+    }) };
+  }
+  if (url === '/api/data/previsao') {
+    return { ok:true, json: async () => ({
+      data: { payload: {
+        forecastItems: [{name:'CLIENTE PEDIDO NOVO FAKE', squad:'Invictus', coord:'jefferson.vieira', am:null, requestDate:'${ddmm}/2026', noticeDays:30, projectedDate:'01/12/2026', projectedMonth:'2026-12', overdue:false, fee:3000, confirmed:false}],
+        forecastIncomplete: [], previsaoRiskPool: [], recoveryItems: [], activeMrrTotal: 500000
+      } },
+      status: { status:'ok', updatedAt: Date.now(), error:null }
+    }) };
+  }
+  return { ok:true, json: async () => ({ data:null, status:null }) };
+};`;
+  const dom = loadDom(fetchImpl);
+  const doc = dom.window.document;
+  setTimeout(()=>{
+    assert(dom.window.__errors.length===0, '[churn-requests-vs-confirmations] no JS errors on load');
+    const insightsHTML = doc.getElementById('overview-insights').innerHTML;
+    assert(insightsHTML.includes('1</strong> novo(s) pedido(s) de churn'), '[churn-requests-vs-confirmations] counts exactly 1 new request (CLIENTE PEDIDO NOVO FAKE)');
+    assert(insightsHTML.includes('1</strong> cliente(s) efetivamente tiveram o status alterado para Churned'), '[churn-requests-vs-confirmations] counts exactly 1 actual confirmation (only the statuses:churned one, not the statuses:active scheduled one)');
+    assert(!insightsHTML.includes('2</strong> cliente(s) efetivamente'), '[churn-requests-vs-confirmations] does NOT count the still-active scheduled project as a confirmation');
+  }, 400);
+})();
+
 // ---- Scenario 2d-ter: forecastItems with a real Data de Churn (confirmed:true) must NOT be double
 // counted (reported 03/11 — a still-active project can have both churnRequestDate AND a real churnDate
 // set; since 03/11 transformPrevisao prefers the real churnDate, and that same project is ALSO already
@@ -257,6 +301,12 @@ window.fetch = async (url, opts) => {
     const pill = doc.getElementById('sync-pill-helpflag');
     assert(pill.classList.contains('ok'), '[helpflag-preseeded] helpflag pill shows ok status from /api/data');
     assert(doc.getElementById('hf-table').innerHTML.includes('CLIENTE HELPFLAG FAKE'), '[helpflag-preseeded] hf-table re-renders with the synced data');
+    // Melissa Pessoa removida de ACTIVE_COORDS em 09/11 (não é mais coordenadora) — a tabela de 12
+    // semanas lê as chaves direto do RAW.hfWeeklyTrend.byCoord sincronizado (não da lista estática
+    // assada no publish), então um sync de verdade já reflete a lista atual de coordenadores sozinho.
+    const weeklyRows = doc.getElementById('hf-weekly-trend').querySelectorAll('tbody tr');
+    assert(weeklyRows.length === 1, '[helpflag-preseeded] weekly trend table row count reflects the freshly-synced byCoord (1), not the static 12-coordinator snapshot');
+    assert(!doc.getElementById('hf-weekly-trend').innerHTML.includes('Melissa'), '[helpflag-preseeded] weekly trend table has no Melissa Pessoa after a live sync (ACTIVE_COORDS updated 09/11)');
   }, 400);
 })();
 

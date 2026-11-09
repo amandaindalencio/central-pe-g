@@ -655,7 +655,8 @@ const ACTIVE_SQUADS = ['Invictus','Billions','Exclusive'];
 // Coordenadores hoje ativos (donos de pelo menos um cliente atualmente ativo no Flow) — usado para não
 // oferecer governança/ação a quem não coordena mais ninguém (ex-coordenadores que só aparecem no
 // histórico de HS por terem coordenado um cliente que já churnou).
-const ACTIVE_COORDS = ['Guilhermeduarte.coord','gustavosmarito.coord','gustavosmarito.tech','jefferson.vieira','leonardopereira','lucas_isaque','melissa.pessoa','nayaraventura','thaina.gomes','thiago.almeida','ueliton.pereira','vitor.neres'];
+// melissa.pessoa removida em 09/11 — não é mais coordenadora (pedido do usuário).
+const ACTIVE_COORDS = ['Guilhermeduarte.coord','gustavosmarito.coord','gustavosmarito.tech','jefferson.vieira','leonardopereira','lucas_isaque','nayaraventura','thaina.gomes','thiago.almeida','ueliton.pereira','vitor.neres'];
 // Squad de cada coordenador, derivado dos próprios dados de Help Flag (cada linha carteira já traz coord+squad) —
 // usa a squad mais frequente entre os clientes do coordenador em todos os meses sincronizados, caso ele tenha
 // atendido mais de uma squad ao longo do histórico.
@@ -680,12 +681,16 @@ const MONTHS = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','202
 const MONTH_LABEL = {'2026-01':'Janeiro','2026-02':'Fevereiro','2026-03':'Março','2026-04':'Abril','2026-05':'Maio','2026-06':'Junho','2026-07':'Julho','2026-08':'Agosto','2026-09':'Setembro','2026-10':'Outubro','2026-11':'Novembro','2026-12':'Dezembro'};
 const MONTH_SHORT = {'2026-01':'Jan','2026-02':'Fev','2026-03':'Mar','2026-04':'Abr','2026-05':'Mai','2026-06':'Jun','2026-07':'Jul','2026-08':'Ago','2026-09':'Set','2026-10':'Out','2026-11':'Nov','2026-12':'Dez'};
 // Revenue Churn ganhou Novembro (19/10) e Dezembro (02/11) — lista própria, separada de
-// MONTHS_INCL_OCT (Help Flag/NPS), que fica só até Outubro de propósito (não foi pedido pra elas).
+// MONTHS_INCL_OCT (Help Flag) e NPSCSAT_MONTHS (abaixo), que ficam em escopos diferentes de propósito.
 const CHURN_MONTHS = [...MONTHS, '2026-10', '2026-11', '2026-12'];
-// Help Flag e NPS/CSAT ganharam outubro (MTD) numa rodada anterior — usam essa lista
-// em vez de MONTHS puro pra não mexer no "Geral" de Churn/Downsell/Renovação
-// (que continuam tratando outubro/novembro/dezembro como meses parciais à parte, de propósito).
+// Help Flag ganhou outubro (MTD) numa rodada anterior — usa essa lista em vez de MONTHS puro pra não
+// mexer no "Geral" de Churn/Downsell/Renovação (que continuam tratando outubro/novembro/dezembro como
+// meses parciais à parte, de propósito). Fica só até Outubro de propósito — Help Flag não foi incluído
+// no pedido de estender pra Novembro (09/11), só NPS & CSAT.
 const MONTHS_INCL_OCT = [...MONTHS, '2026-10'];
+// NPS & CSAT ganhou Novembro em 09/11 (pedido: "já temos respostas registradas nesse mês") — lista
+// própria, separada de MONTHS_INCL_OCT (Help Flag).
+const NPSCSAT_MONTHS = [...MONTHS, '2026-10', '2026-11'];
 // Mês vigente calculado a cada carregamento (não mais fixo em Outubro) — assim o rótulo "(MTD)" e o
 // texto de mês parcial do Revenue Churn acompanham o calendário sozinhos daqui pra frente, sem precisar
 // de um ajuste manual toda virada de mês (pedido explícito em 02/11: "para anteciparmos os dados").
@@ -693,7 +698,7 @@ const TODAY_ISO = new Date().toISOString().slice(0,10);
 const CURRENT_MONTH_KEY = TODAY_ISO.slice(0,7);
 function prevMonthKey(m){ if(m==='2026-12') return '2026-11'; if(m==='2026-11') return '2026-10'; if(m==='2026-10') return '2026-09'; const i = MONTHS.indexOf(m); return i>0 ? MONTHS[i-1] : null; }
 function nextMonthKey(m){ const [y,mo] = m.split('-').map(Number); return new Date(Date.UTC(y,mo,1)).toISOString().slice(0,7); }
-function monthOptionsHTML(){ return `<option value="all">Geral (Jan–Out)</option>` + MONTHS_INCL_OCT.map(m=>`<option value="${m}">${MONTH_LABEL[m]}${m==='2026-10'?' (MTD)':''}</option>`).join(''); }
+function monthOptionsHTML(){ return `<option value="all">Geral (Jan–Nov)</option>` + NPSCSAT_MONTHS.map(m=>`<option value="${m}">${MONTH_LABEL[m]}${m===CURRENT_MONTH_KEY?' (MTD)':''}</option>`).join(''); }
 function churnMonthOptionsHTML(){ return `<option value="all">Geral (Jan–Out)</option>` + CHURN_MONTHS.map(m=>`<option value="${m}">${MONTH_LABEL[m]}${m===CURRENT_MONTH_KEY?' (MTD)':''}</option>`).join(''); }
 
 /* ---- churn / downsell row accessors ---- */
@@ -1351,7 +1356,7 @@ function npscxMonthlyByProject(){
   const map = {};
   npscxCleanResponses().forEach(r=>{
     const mk = r.csat_date.slice(0,7);
-    if(!MONTHS_INCL_OCT.includes(mk)) return;
+    if(!NPSCSAT_MONTHS.includes(mk)) return;
     map[r.project_id] = map[r.project_id] || {};
     const ex = map[r.project_id][mk];
     if(!ex || r.csat_date >= ex.csat_date) map[r.project_id][mk] = r;
@@ -1410,11 +1415,11 @@ function csatAvgs(rows){
   return out;
 }
 function npscxLatestMonthWithData(){
-  for(let i=MONTHS_INCL_OCT.length-1;i>=0;i--){ if(npscxRowsForMonth(MONTHS_INCL_OCT[i],'all').length>0) return MONTHS_INCL_OCT[i]; }
-  return MONTHS_INCL_OCT[MONTHS_INCL_OCT.length-1];
+  for(let i=NPSCSAT_MONTHS.length-1;i>=0;i--){ if(npscxRowsForMonth(NPSCSAT_MONTHS[i],'all').length>0) return NPSCSAT_MONTHS[i]; }
+  return NPSCSAT_MONTHS[NPSCSAT_MONTHS.length-1];
 }
 function npscxTrendOf(pid){
-  const clean = npscxCleanResponses().filter(r=>r.project_id===pid && MONTHS_INCL_OCT.includes(r.csat_date.slice(0,7))).sort((a,b)=>a.csat_date<b.csat_date?-1:1);
+  const clean = npscxCleanResponses().filter(r=>r.project_id===pid && NPSCSAT_MONTHS.includes(r.csat_date.slice(0,7))).sort((a,b)=>a.csat_date<b.csat_date?-1:1);
   if(clean.length<2) return {dir:'stable', delta:0};
   const last = clean[clean.length-1], prev = clean[clean.length-2];
   if(last.nps==null||prev.nps==null) return {dir:'stable', delta:0};
@@ -1459,14 +1464,14 @@ function buildPacingTab(){
 
 function buildVisaoTab(){
   const selMonth = npscxMonth==='all' ? npscxLatestMonthWithData() : npscxMonth;
-  const monthlySeries = MONTHS_INCL_OCT.map(m=>({m, stats:npsStats(npscxRowsForMonth(m, npscxSquad))}));
+  const monthlySeries = NPSCSAT_MONTHS.map(m=>({m, stats:npsStats(npscxRowsForMonth(m, npscxSquad))}));
   const curRows = npscxRows(npscxMonth, npscxSquad);
   const curStats = npsStats(curRows);
   const curCsat = csatAvgs(curRows);
 
   if(window._npscxEvoChart) window._npscxEvoChart.destroy();
   window._npscxEvoChart = new Chart(document.getElementById('npscxEvoChart'), {
-    data:{labels:MONTHS_INCL_OCT.map(m=>MONTH_SHORT[m]),datasets:[
+    data:{labels:NPSCSAT_MONTHS.map(m=>MONTH_SHORT[m]),datasets:[
       {type:'bar',label:'Respostas',data:monthlySeries.map(s=>s.stats.count),yAxisID:'y2',order:2,
         backgroundColor:monthlySeries.map(s=>s.m===selMonth?'#D6281A':'rgba(28,25,23,.08)'),borderColor:'rgba(28,25,23,.18)',borderWidth:1,borderRadius:4},
       {type:'line',label:'NPS Score (%)',data:monthlySeries.map(s=>s.stats.npsScore),yAxisID:'y',order:1,
@@ -1545,8 +1550,8 @@ function buildSquadTab(){
   if(window._npscxSquadNpsEvo) window._npscxSquadNpsEvo.destroy();
   window._npscxSquadNpsEvo = new Chart(document.getElementById('npscxSquadNpsEvo'), {
     type:'line',
-    data:{labels:MONTHS_INCL_OCT.map(m=>MONTH_SHORT[m]),datasets:ACTIVE_SQUADS.map(sq=>({
-      label:sq, data:MONTHS_INCL_OCT.map(m=>npsStats(npscxRowsForMonth(m,sq)).npsScore),
+    data:{labels:NPSCSAT_MONTHS.map(m=>MONTH_SHORT[m]),datasets:ACTIVE_SQUADS.map(sq=>({
+      label:sq, data:NPSCSAT_MONTHS.map(m=>npsStats(npscxRowsForMonth(m,sq)).npsScore),
       borderColor:SQUAD_COLOR[sq],backgroundColor:SQUAD_COLOR[sq]+'22',borderWidth:2,pointRadius:3,tension:.3,spanGaps:true
     }))},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'rgba(28,25,23,.65)',font:{size:10}}}},
@@ -1607,7 +1612,7 @@ function buildCoordTab(){
     chartFn: (e,canvasId)=>{
       new Chart(document.getElementById(canvasId), {
         type:'line',
-        data:{labels:MONTHS_INCL_OCT.map(m=>MONTH_SHORT[m]),datasets:[{label:'NPS Score',data:MONTHS_INCL_OCT.map(m=>npsStats(rowsForCoord(e.key,m)).npsScore),borderColor:'#D6281A',backgroundColor:'rgba(214,40,26,.08)',borderWidth:2,pointRadius:3,tension:.3,fill:true,spanGaps:true}]},
+        data:{labels:NPSCSAT_MONTHS.map(m=>MONTH_SHORT[m]),datasets:[{label:'NPS Score',data:NPSCSAT_MONTHS.map(m=>npsStats(rowsForCoord(e.key,m)).npsScore),borderColor:'#D6281A',backgroundColor:'rgba(214,40,26,.08)',borderWidth:2,pointRadius:3,tension:.3,fill:true,spanGaps:true}]},
         options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+'%',color:'rgba(28,25,23,.55)'},grid:{color:'rgba(28,25,23,.08)'}},x:{grid:{display:false},ticks:{color:'rgba(28,25,23,.55)',font:{size:9}}}}}
       });
     },
@@ -1726,19 +1731,30 @@ function buildOverviewInsights(){
     if(tf) insights.push(`Do histórico Jan–Ago, <strong>${(100*tc/tf).toFixed(1)}%</strong> dos clientes com HS≤21 num mês deram churn no mês seguinte (${tc} de ${tf}) — Help Flag antecipa risco real, não é só ruído.`);
   })();
 
-  // 2) pedidos de churn confirmado (Solicitação Churn) nos últimos 7 dias — RAW.forecastItems + data de hoje
+  // 2) pedidos de churn (Data de Solicitação) x confirmações de churn (status passado pra Churned) nos
+  // últimos 7 dias — pedido do usuário (09/11): "quantos projetos tiveram a Data de Solicitação
+  // preenchida nesse período e quantos efetivamente tiveram o status passado para Churned" — são 2
+  // contagens independentes na mesma janela (quem pede e quem efetivamente sai não são
+  // necessariamente os mesmos projetos dentro de só 7 dias, já que tem aviso prévio no meio).
   (function(){
     const now = new Date();
     const toKey = now.toISOString().slice(0,10).replace(/-/g,'');
     const fromDate = new Date(now.getTime()-7*86400000);
     const fromKey = fromDate.toISOString().slice(0,10).replace(/-/g,'');
     const toBr = ddmmFromIso(now.toISOString().slice(0,10)), fromBr = ddmmFromIso(fromDate.toISOString().slice(0,10));
-    const novos = (RAW.forecastItems||[]).filter(f=>{
+    const novosPedidos = (RAW.forecastItems||[]).filter(f=>{
       if(!f.requestDate) return false;
       const d = f.requestDate.split('/'); const key = d[2]+d[1]+d[0];
       return key>=fromKey && key<=toKey;
     });
-    insights.push(`<strong>${novos.length}</strong> novo(s) pedido(s) de churn confirmado(s) (Solicitação Churn), totalizando <strong>${fmtBRL(sumBy(novos,f=>f.fee))}</strong> de MRR, entrou/entraram na Previsão entre ${fromBr} e ${toBr}.`);
+    const allChurnRows = Object.values(RAW.churnByMonth||{}).flat();
+    const confirmados = allChurnRows.filter(r=>{
+      if(!r.data || r.statuses!=='churned') return false; // r.data = "DD/MM"; só conta quem já está de fato Churned, não agendado
+      const [dd,mm] = r.data.split('/');
+      const key = '2026'+mm+dd;
+      return key>=fromKey && key<=toKey;
+    });
+    insights.push(`<strong>${novosPedidos.length}</strong> novo(s) pedido(s) de churn (Data de Solicitação) entre ${fromBr} e ${toBr}, totalizando <strong>${fmtBRL(sumBy(novosPedidos,f=>f.fee))}</strong> de MRR em aviso prévio. No mesmo período, <strong>${confirmados.length}</strong> cliente(s) efetivamente tiveram o status alterado para Churned, totalizando <strong>${fmtBRL(sumBy(confirmados,r=>r.valor))}</strong>.`);
   })();
 
   // 3) tendência de HS≤21 na carteira ativa — primeiro vs último mês com dado em RAW.helpFlagByMonth
