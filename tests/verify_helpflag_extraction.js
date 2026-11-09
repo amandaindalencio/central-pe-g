@@ -39,7 +39,7 @@ console.log('Guilhermeduarte.coord weekly:', JSON.stringify(gd));
 // 38.7% on 26/09 is the exact value already shown (and confirmed correct) in
 // the dashboard screenshot before this fix — must still match post-refactor.
 if (!gd || gd[0].pct !== 38.7) ok = false;
-if (Object.keys(weeklyTrend.byCoord).length !== 11) ok = false; // Melissa Pessoa removida 09/11 (não é mais coordenadora)
+if (Object.keys(weeklyTrend.byCoord).length !== 10) ok = false; // Melissa Pessoa e Leonardo Pereira removidos 09/11 (não são mais coordenadores)
 
 if (!ok) {
   console.log('MISMATCH');
