@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { setDoc } from '@/lib/store';
+import { getDoc, setDoc } from '@/lib/store';
 import {
   fetchDownsells, fetchRenovacoes, fetchNpsCsatHistory, fetchChurnedProjects,
   fetchPrevisaoData, fetchHelpFlagHistory,
@@ -50,8 +50,14 @@ async function runService(service) {
   await setDoc(`sync:status:${service}`, { status: 'running', updatedAt: Date.now(), error: null });
 
   try {
-    const raw = await svc.fetch();
-    const payload = svc.transform(raw);
+    // CORREÇÃO 13/11: lê o payload já salvo da sincronização anterior ANTES de buscar dado novo —
+    // Help Flag e NPS/CSAT usam isso pra fazer carga incremental (só o que pode ter mudado) em vez
+    // de reprocessar o ano inteiro toda vez (manual de boas práticas §3.3). Os outros serviços
+    // ignoram o 2º argumento (fetch/transform de 1 parâmetro só) — sem efeito neles.
+    const previousDoc = await getDoc(`sync:data:${service}`);
+    const previousPayload = previousDoc && previousDoc.payload;
+    const raw = await svc.fetch(previousPayload);
+    const payload = svc.transform(raw, previousPayload);
     const now = Date.now();
     await setDoc(`sync:data:${service}`, { payload, updatedAt: now });
     await setDoc(`sync:status:${service}`, { status: 'ok', updatedAt: now, error: null });
