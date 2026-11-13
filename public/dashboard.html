@@ -1720,11 +1720,17 @@ function renderNpsCsatSection(){
 function buildOverviewInsights(){
   const insights = [];
 
-  // 1) Help Flag prediz churn? — mantido estático por pedido explícito (05/10):
-  // a tentativa de recalcular isso cruzando RAW.helpFlagByMonth x RAW.churnByMonth
-  // por nome deu 0% (bug real — provavelmente mismatch de nome/categoria entre
-  // as duas fontes), então volta a usar RAW.helpFlagChurnCross (snapshot da
-  // coleta de 21/09) até isso ser investigado com calma.
+  // 1) Help Flag prediz churn? — tentativa de recalcular em 13/11 (pedido do usuário) cruzando por
+  // documentId em vez de nome (ver groupHelpFlagByMonth, lib/transforms.js) revelou que o problema
+  // NÃO é só nome vs. id — é estrutural: RAW.helpFlagByMonth usa filterByStatus='active' (de
+  // propósito, documentado no rodapé) pra TODO o histórico, então quem churnou some de TODOS os
+  // meses do roster, inclusive dos meses em que ainda estava ativo e foi flagado. Isso torna
+  // impossível cruzar "flagado → churnou no mês seguinte" com a fonte atual (dá ~0,7%, não porque
+  // melhorou/piorou, mas porque a maioria de quem realmente churna já não aparece em nenhum mês do
+  // Help Flag pra começo de conversa). Recalcular isso de verdade exige buscar o histórico SEM esse
+  // filtro (carteira completa, incluindo quem já saiu) — uma consulta bem mais pesada, que não faz
+  // sentido rodar a cada carregamento da página. Mantido estático (snapshot de 21/09, 6,1%) até essa
+  // análise ser refeita sob demanda, fora do pipeline de sync de rotina.
   (function(){
     const cross = RAW.helpFlagChurnCross || {};
     const tf = Object.values(cross).reduce((a,v)=>a+v.flaggedCount,0);
