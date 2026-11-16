@@ -1888,7 +1888,9 @@ function buildRenovacaoSection(){
     {label:'Ciclo já passou, sem churn',value:fmtNum(overdue.length),sub:'renovação implícita — ver Limitações',color:'green'},
   ].map(kpiCard).join('');
   paginate('renovacao-table', [
-    {label:'Cliente',key:'name'},{label:'Squad',render:r=>sqDotHTML(r.squad),sortVal:r=>r.squad},{label:'Coordenador',render:r=>formatName(r.coord),sortVal:r=>formatName(r.coord)},
+    {label:'Cliente',key:'name'},
+    {label:'Produto',render:r=>r.product||'Não informado',sortVal:r=>r.product||''},
+    {label:'Squad',render:r=>sqDotHTML(r.squad),sortVal:r=>r.squad},{label:'Coordenador',render:r=>formatName(r.coord),sortVal:r=>formatName(r.coord)},
     {label:'Account Manager',render:r=>formatName(r.am||'Sem AM'),sortVal:r=>r.am||''},
     {label:'Data de renovação',render:r=>`${r.renewalDate} <span class="chip ${r.daysUntil<0?'Safe':r.daysUntil<=30?'Danger':'ontrack'}">${r.daysUntil<0?'ciclo passou, ativo':r.daysUntil===0?'hoje':r.daysUntil+'d'}</span>`,sortVal:r=>r.daysUntil},
     {label:'Booking (m)',num:true,render:r=>r.bookingMonths,sortVal:r=>r.bookingMonths},

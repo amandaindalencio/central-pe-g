@@ -380,6 +380,7 @@ setTimeout(()=>{
   const renovTable = doc.getElementById('renovacao-table');
   assert(!!renovTable && renovTable.innerHTML.trim().length>0, 'renovacao-table renders');
   assert(renovTable.innerHTML.includes('ciclo passou, ativo') || renovTable.innerHTML.includes('d</span>') || renovTable.innerHTML.includes('hoje'), 'renovacao table shows days-until-renewal status chips');
+  assert(renovTable.querySelector('th') && Array.from(renovTable.querySelectorAll('th')).some(th=>th.textContent.includes('Produto')), 'renovacao table has a "Produto" column (16/11 — "deixar claro sobre o que estamos olhando")');
 
   // --- TEST: Renovação month selector (28/09) ---
   (function checkRenovacaoMonthSelector(){
